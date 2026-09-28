@@ -85,6 +85,14 @@ header h1{font-size:1em;margin:0 .4em 0 0;font-weight:700;letter-spacing:.22em}
   transition:background .18s ease,border-color .18s ease,transform .18s ease}
 /* 使用中は1〜2m離れても一目で分かるよう、マス全体を青で塗る（2026-09-26、枠だけでは見分けられなかった） */
 .seat.used{background:var(--ao);border-color:#6FA8EC}
+/* 席の種類ごとの色: 左の太帯と番号の色で見分ける。青は使用中専用なので使わない */
+.seat[data-g="0"]{--g:#A98BD6}  /* 座敷 17〜20: 紫 */
+.seat[data-g="1"]{--g:#E0A526}  /* 小上り 11〜16: 山吹 */
+.seat[data-g="2"]{--g:#7FB069}  /* テーブル 8〜10: 萌黄 */
+.seat[data-g="3"]{--g:#D98A92}  /* カウンター 1〜7: 薄紅 */
+.seat[data-g]:not([data-g="-1"]){box-shadow:inset 8px 0 0 var(--g);padding-left:11px;background-image:linear-gradient(color-mix(in srgb,var(--g) 12%,transparent),color-mix(in srgb,var(--g) 12%,transparent))}
+.seat[data-g]:not([data-g="-1"]) .no span{color:var(--g)}
+.seat.used[data-g] .no span{color:var(--kinari)}
 .seat.has-next{border-color:var(--moegi)}
 .seat.has-res{background:#2D2420}
 .seat.used .no em{font-style:normal;font-size:.6em;color:var(--kinari);font-weight:600}
@@ -673,6 +681,7 @@ function openMoreDlg(entries,no){
 function seatEl(no){
   const b=document.createElement('button');
   b.dataset.no=no;
+  b.dataset.g=ROWS.findIndex(r=>r.nos.includes(no)); // 席の種類ごとの色分け（臨時席は-1で色なし）
   const isToday=date===today();
   const here=db.entries.filter(e=>e.date===date&&!e.cancelled&&!e.gone&&e.tables.includes(no));
   // 青は「来店済みの予約がこの卓にあるか」で決める。
