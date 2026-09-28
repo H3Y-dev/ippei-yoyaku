@@ -145,7 +145,9 @@ header h1{font-size:1em;margin:0 .4em 0 0;font-weight:700;letter-spacing:.22em}
 #bkpLastExport.warn{color:var(--enji-label);font-weight:700}
 #undoBtn:not(:disabled){border-color:var(--karashi);color:var(--karashi);font-weight:700}
 .not-today-bar{background:var(--enji);color:var(--kinari);font-size:.82em;font-weight:700;padding:.2em .6em;text-align:center;flex:none;letter-spacing:.05em}
-.legend{display:flex;align-items:center;gap:.5em;font-size:.75em;color:var(--kinari);opacity:.85}
+.legend{display:flex;align-items:center;gap:.5em;font-size:.75em;color:var(--kinari);opacity:.85;min-width:0;overflow:hidden;flex:0 1 auto}
+/* 幅が足りないときは凡例の方を削り、右端のボタンは見切れさせない（2026-09-29） */
+#exNo,#exAdd,#bkpOpen{flex:none}
 .lg-item{display:inline-flex;align-items:center;gap:.2em;white-space:nowrap}
 .lg-swatch{display:inline-block;width:11px;height:11px;border-radius:3px;flex:none}
 .lg-empty{background:var(--sumi-lit);border:1px solid var(--ash)}
