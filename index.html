@@ -1434,6 +1434,14 @@ if(loadFailed&&!location.search.includes('test=1')){
   alert('保存されていた予約を読み取れませんでした。\n読めなかった内容は端末内に退避してあります。\n\n画面右下の「バックアップ」を開き、「アプリの中の控え」から戻してください。');
 }
 if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});
+// 作業中にiPadがスリープしないようにする
+if ('wakeLock' in navigator) {
+  let wl = null;
+  const reqWl = () => navigator.wakeLock.request('screen').then(l => wl = l).catch(() => {});
+  reqWl();
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') reqWl(); });
+  document.addEventListener('pointerdown', () => reqWl(), { once: true });
+}
 if(!location.search.includes('test=1')){
   createDailySnapshot();
   navigator.storage?.persist?.().catch(()=>{});
