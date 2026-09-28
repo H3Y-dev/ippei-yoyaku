@@ -1,0 +1,2388 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>一平 予約・席</title>
+<link rel="manifest" href="manifest.json">
+<style>
+:root{
+  --fs:19px;            /* 1〜2mの視認性はここで調整。画面右上の A- / A+ が書き換える */
+  --sumi:#1A1513; --sumi-lit:#241D1A; --ash:#3A322D;
+  --enji:#8E2432; --enji-label:#D98A92; --ame:#C98A3C; --ao:#185094; --karashi:#E0A526;
+  --moegi:#7FB069;
+  --kinari:#EFE6D6; --kinari-muted:#C9BCAA;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+[hidden]{display:none!important}   /* display:flex 指定が hidden 属性を上書きするのを防ぐ */
+html,body{margin:0;height:100%;overflow:hidden;overscroll-behavior:none}
+body{
+  font:var(--fs)/1.3 -apple-system,"Hiragino Sans","Yu Gothic",sans-serif;
+  font-variant-numeric:tabular-nums;
+  background:var(--sumi);color:var(--kinari);
+  padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  display:flex;flex-direction:column;
+}
+button{font:inherit;color:inherit;background:var(--sumi-lit);border:1px solid var(--ash);
+  border-radius:8px;padding:.35em .7em;cursor:pointer;
+  transition:background-color .18s ease,border-color .18s ease,transform .18s ease}
+button:active{background:var(--ash);transform:translateY(1px)}
+button.on{background:var(--enji);border-color:var(--enji);color:var(--kinari)}
+button:disabled{opacity:.4;cursor:default}
+button:disabled:active{background:var(--sumi-lit);transform:none}
+input,select,textarea{font:inherit;padding:.4em;border:1px solid var(--ash);border-radius:8px;background:var(--sumi);color:inherit;width:100%}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--karashi);outline-offset:2px}
+
+header{display:flex;align-items:center;gap:.35em;padding:.3em .5em;border-bottom:1px solid var(--ash);background:var(--sumi-lit);flex:none}
+header .grow{flex:1}
+header h1{font-size:1em;margin:0 .4em 0 0;font-weight:700;letter-spacing:.22em}
+
+#dates{display:flex;gap:4px;padding:.4em .6em;flex:none;align-items:center}
+#dates button{flex:1;padding:.3em 0;text-align:center;line-height:1.15}
+#dates button small{display:block;font-size:.72em;color:var(--kinari);opacity:.68}
+#dates button.on small{color:var(--kinari);opacity:.85}
+.sat{color:var(--karashi)}.sun{color:var(--enji-label)}
+
+#body{flex:1;display:flex;gap:.5em;padding:0 .6em .6em;min-height:0}
+#left{width:30%;min-width:280px;max-width:300px;display:flex;flex-direction:column;gap:.5em;min-height:0}
+#body.left-off #left{display:none}
+#grip{flex:none;width:2em;padding:0;writing-mode:vertical-rl;letter-spacing:.3em;
+  background:var(--sumi-lit);border:1px solid var(--ash);color:var(--kinari);opacity:.85}
+#right{flex:1;min-width:0;display:flex;flex-direction:column;gap:.5em;min-height:0}
+.box{background:var(--sumi-lit);border:1px solid var(--ash);border-radius:10px;display:flex;flex-direction:column;min-height:0}
+.box>h2{font-size:.85em;margin:0;padding:.45em .6em;border-bottom:1px solid var(--ash);
+  display:flex;align-items:center;gap:.4em;color:var(--kinari);opacity:.8;font-weight:600;flex:none}
+.box>h2 .grow{flex:1}
+.box>h2 button{padding:.15em .5em;font-size:1em}
+.list{overflow:auto;padding:.4em;display:flex;flex-direction:column;gap:.35em;-webkit-overflow-scrolling:touch}
+.list.drop-tgt{outline:2px dashed var(--enji);outline-offset:-2px}
+
+.item{border:1px solid var(--ash);border-left-width:6px;border-radius:8px;padding:.35em .5em;background:var(--sumi-lit);min-width:0;overflow-wrap:anywhere}
+/* 通常の予約の線も赤〜黄の色相なので、線だけでは電話待ちと見分けられない。カードの地ごと洋がらしに寄せる */
+.item.wait{border-left-color:var(--karashi)!important;border-color:var(--karashi);background:color-mix(in srgb,var(--karashi) 16%,var(--sumi-lit))}
+.badge{display:inline-block;flex:none;white-space:nowrap;padding:.1em .4em;font-size:.72em;font-weight:700;line-height:1.2;border-radius:4px;background:var(--karashi);color:var(--sumi);vertical-align:baseline}
+.badge.next{background:var(--moegi);color:var(--sumi)}
+.item .l1{display:flex;align-items:baseline;gap:.4em;flex-wrap:wrap}
+.item .l1 .nm{flex:none;white-space:nowrap}  /* 名前を縦に1字ずつ折らない。詰めるのは横の時間・人数の方 */
+.drag-handle{flex:none;padding:0 .3em;border:0;background:transparent;color:var(--kinari);opacity:.7;cursor:grab;touch-action:none}
+.drag-handle:active{background:transparent;cursor:grabbing}
+.item .nm{font-weight:700;font-size:1.05em}
+.item .mt{color:var(--kinari);opacity:.7;font-size:.82em}
+.item .tbl{font-size:.82em;color:var(--kinari-muted);font-weight:600}
+.item .note{font-size:.85em;color:var(--karashi);font-weight:600;opacity:1;white-space:pre-line}
+.item .acts{display:flex;gap:.3em;margin-top:.3em;flex-wrap:wrap}
+.item .acts button{padding:.1em .45em;font-size:.8em;min-height:44px}
+.empty{color:var(--kinari);opacity:.65;font-size:.85em;padding:.5em;text-align:center}
+
+#map{flex:1;display:flex;gap:6px;min-height:0}
+.zashiki-column{width:7em;flex:none;display:flex;flex-direction:column;gap:6px;min-height:0}
+.main-map{flex:1;min-width:0;display:flex;flex-direction:column;gap:6px;min-height:0}
+.row{flex:1;display:flex;gap:6px;min-height:0}
+.seat{flex:1;min-width:0;container-type:inline-size;border:2px solid var(--ash);border-radius:10px;background:var(--sumi-lit);
+  padding:2px 3px;display:flex;flex-direction:column;overflow:hidden;text-align:left;
+  transition:background .18s ease,border-color .18s ease,transform .18s ease}
+/* 使用中は1〜2m離れても一目で分かるよう、マス全体を青で塗る（2026-09-26、枠だけでは見分けられなかった） */
+.seat.used{background:var(--ao);border-color:#6FA8EC}
+.seat.has-next{border-color:var(--moegi)}
+.seat.has-res{background:#2D2420}
+.seat.used .no em{font-style:normal;font-size:.6em;color:var(--kinari);font-weight:600}
+.seat.used .chip{background:transparent}
+.seat.used .chip-note{color:var(--kinari)}
+.seat.drop-tgt{border-color:var(--enji);border-style:dashed}
+.seat .no{font-size:1.15em;font-weight:700;line-height:1;display:flex;gap:.25em;align-items:center}
+.seat .no em{font-style:normal;font-size:.6em;color:var(--ao);font-weight:600}
+.seat .as{flex:1;display:flex;flex-direction:column;gap:2px;margin-top:2px;overflow:hidden}
+.seat-empty{display:flex;align-items:center;justify-content:center;flex:1;color:var(--kinari);opacity:.35;font-size:.85em;letter-spacing:.05em}
+.chip{border-left:5px solid;border-radius:4px;background:var(--sumi-lit);padding:2px 4px;font-size:1em;
+  line-height:1.1;overflow:hidden;touch-action:none;
+  flex:1;min-height:0;display:flex;flex-direction:column;justify-content:center;cursor:grab;
+  transition:background-color .18s ease,border-color .18s ease,transform .18s ease}
+.chip:active{cursor:grabbing}
+.chip.arrived{border-left-color:var(--ao)!important}
+.chip.next{background:var(--sumi-lit)!important;border-left-color:var(--moegi)!important}
+.chip.solo .chip-name{font-size:clamp(1em,22cqw,1.75em);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}  /* 1件なら縦に余裕がある。最大2行 */
+.chip.solo .chip-meta{flex-direction:row;gap:.5em;font-size:clamp(.85em,13cqw,1.2em);margin-top:.15em}
+.chip.solo .chip-time{order:-1}
+.chip.two-line .chip-name{font-size:clamp(.9em,16cqw,1.2em)}
+@container (max-width:150px){
+  .chip.solo .chip-meta{flex-direction:column;gap:0}
+  .chip.solo .chip-time{order:0}
+}
+@container (max-width:120px){
+  .chip .l1{flex-wrap:wrap;white-space:normal}
+  .chip-name{white-space:normal;overflow-wrap:anywhere;text-overflow:clip}
+}
+.chip .l1{display:flex;align-items:center;gap:.15em;min-width:0;white-space:nowrap}
+.chip-name{min-width:0;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-weight:700;padding:.2em 0}
+.chip-meta{display:flex;flex-direction:column;gap:1px;min-width:0;overflow:hidden}
+.chip-people,.chip-time{overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-weight:600}
+.chip-note{color:var(--karashi);font-weight:600;font-size:.8em;margin-top:.1em;
+  overflow:hidden;white-space:nowrap;text-overflow:ellipsis;min-width:0}
+.chip.two-line .chip-note{display:none}
+.chip.two-line{padding:1px 3px;font-size:1.05em}
+.chip.two-line .chip-meta{flex-direction:row;gap:.35em}
+.chip.two-line .chip-time{order:-1}
+#map .main-map .row:nth-child(3) .chip{border-left-width:3px;padding:1px 0;font-size:.85em}
+#map .main-map .row:nth-child(3) .l1{position:relative}
+#map .main-map .row:nth-child(3) .chip-name{padding-left:.15em}
+.drag-preview{position:fixed;z-index:10;pointer-events:none;max-width:12em;padding:.25em .45em;border:1px solid var(--enji);
+  border-radius:6px;background:var(--sumi-lit);color:var(--kinari);font-size:.85em;box-shadow:0 2px 7px rgba(20,12,8,.55)}
+.extra{display:flex;flex:1;min-width:0;gap:2px}
+.extra .seat{min-width:0}
+.extra-del{flex:none;width:1.65em;padding:0;border-radius:7px;color:var(--kinari);opacity:.7}
+.hint{font-size:.8em;color:var(--kinari);opacity:.65;padding:0 .2em}
+#bkpOpen.warn{border-color:var(--enji);background:var(--enji);color:var(--kinari);font-weight:700}
+#bkpLastExport.warn{color:var(--enji-label);font-weight:700}
+#undoBtn:not(:disabled){border-color:var(--karashi);color:var(--karashi);font-weight:700}
+.not-today-bar{background:var(--enji);color:var(--kinari);font-size:.82em;font-weight:700;padding:.2em .6em;text-align:center;flex:none;letter-spacing:.05em}
+.legend{display:flex;align-items:center;gap:.5em;font-size:.75em;color:var(--kinari);opacity:.85}
+.lg-item{display:inline-flex;align-items:center;gap:.2em;white-space:nowrap}
+.lg-swatch{display:inline-block;width:11px;height:11px;border-radius:3px;flex:none}
+.lg-empty{background:var(--sumi-lit);border:1px solid var(--ash)}
+.lg-res{background:#2D2420;border:1px solid var(--ash)}
+.lg-used{background:var(--ao);border:1px solid #6FA8EC}
+.lg-next{background:var(--moegi)}
+.lg-wait{background:var(--karashi)}
+.lg-guide{font-size:.9em;color:var(--kinari-muted);margin-left:.3em;white-space:nowrap}
+
+dialog{border:1px solid var(--ash);border-radius:14px;padding:0;max-width:620px;width:92%;max-height:calc(100dvh - 16px);overflow:auto;background:var(--sumi-lit);color:var(--kinari);box-shadow:0 12px 40px rgba(20,12,8,.55)}
+dialog::backdrop{background:#0006}
+form.f{padding:.7em 1em;display:grid;grid-template-columns:5.5em 1fr;gap:.45em .7em;align-items:center}
+form.f h3{grid-column:1/-1;margin:0 0 .2em}
+form.f textarea{resize:vertical}
+form.f .wide{grid-column:1/-1;display:flex;gap:.5em;justify-content:flex-end}
+form.f .wide:last-of-type{position:sticky;bottom:0;background:var(--sumi-lit);padding:.4em 0;margin-bottom:-.7em;border-top:1px solid var(--ash);z-index:2}
+form.f .wide button.on{order:9}
+form.f .wide button.on{order:9}
+form.f label{color:var(--kinari);opacity:.75;font-size:.9em}
+form.f .message{grid-column:1/-1;margin:0;color:var(--enji-label);font-size:.85em}
+.snapshot-head{grid-column:1/-1;display:flex;align-items:center;gap:.5em;margin-top:.35em}
+.snapshot-head strong{flex:1}
+.snapshot-list{grid-column:1/-1;display:flex;flex-direction:column;gap:.35em;max-height:40dvh;overflow:auto}
+.snapshot-row{display:flex;align-items:center;gap:.5em;padding:.35em .45em;border:1px solid var(--ash);border-radius:8px;font-size:.85em}
+.snapshot-row span{flex:1}
+.form-note{grid-column:1/-1;margin:0;font-size:.8em;color:var(--kinari);opacity:.75;line-height:1.5}
+.btn-grid{display:grid;gap:4px}
+.btn-grid.cols-5{grid-template-columns:repeat(5,1fr)}
+.btn-group{display:flex;flex-wrap:wrap;gap:4px;align-items:center}
+.btn-group .p-btn{flex:1 1 0;min-width:2.4em;min-height:44px;font-size:1em}  /* 混雑時に指で押す。数字だけの小さなボタンにしない */
+.btn-group .p-btn[data-val="more"]{flex:2 1 0}
+.btn-group .p-btn[data-val=""]{min-width:3.2em;white-space:nowrap}
+.btn-group button,.btn-grid button{padding:.25em .3em;font-size:.85em;min-height:36px;border-radius:6px;line-height:1.1}
+.btn-group button.on,.btn-grid button.on{background:var(--enji);border-color:var(--enji);color:var(--kinari);font-weight:700}
+#actBtns button{min-height:56px;font-size:1.1em;padding:.5em 1em;border-radius:10px}
+#actBtns button.btn-cancel-act{margin-top:16px;border:1px dashed var(--enji-label);color:var(--enji-label);background:transparent}
+#actBtns button.btn-cancel-act:active{background:rgba(217,138,146,.15)}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>一平</h1>
+  <span class="grow"></span>
+  <button id="wPrev">‹ 前週</button>
+  <button id="wToday">今日</button>
+  <button id="wNext">翌週 ›</button>
+  <span style="width:.5em"></span>
+  <button id="undoBtn" disabled>元に戻す</button>
+  <button id="fsDown">文字 小</button>
+  <button id="fsUp">文字 大</button>
+</header>
+
+<div id="dates"></div>
+<div id="notTodayBar" class="not-today-bar" hidden></div>
+
+<div id="body">
+  <div id="left">
+    <div class="box" style="flex:1">
+      <h2>卓未定の予約 <span class="grow"></span><button id="addRes">＋ 予約</button></h2>
+      <div class="list" id="resList"></div>
+    </div>
+    <div class="box" style="flex:none">
+      <h2 id="cxHead" style="border:none">終了・取消 (0) <span class="grow"></span><button id="cxToggle">表示</button></h2>
+      <div class="list" id="cxList" hidden></div>
+    </div>
+  </div>
+
+  <button id="grip" type="button"></button>
+
+  <div id="right">
+    <div id="map"></div>
+    <div style="display:flex;gap:.5em;align-items:center;flex:none;white-space:nowrap;overflow:hidden">
+      <div id="legend" class="legend">
+        <span class="lg-item"><span class="lg-swatch lg-empty"></span>空き</span>
+        <span class="lg-item"><span class="lg-swatch lg-res"></span>予約</span>
+        <span class="lg-item"><span class="lg-swatch lg-used"></span>使用中</span>
+        <span class="lg-item"><span class="lg-swatch lg-next"></span>次に入る</span>
+        <span class="lg-item"><span class="lg-swatch lg-wait"></span>電話待ち</span>
+        <span class="lg-guide">卓を押す→予約 ／ 名前を押す→使用中・食事終了</span>
+      </div>
+      <span class="hint" id="hint" style="overflow:hidden;text-overflow:ellipsis;min-width:0"></span>
+      <span style="flex:1"></span>
+      <input id="exNo" placeholder="番号" style="width:4.5em" inputmode="numeric">
+      <button id="exAdd">臨時席を追加</button>
+      <button id="bkpOpen">バックアップ</button>
+    </div>
+  </div>
+</div>
+
+<dialog id="dlg"><form class="f" method="dialog" id="frm" autocomplete="off"></form></dialog>
+<dialog id="actDlg"><form class="f" method="dialog" id="actFrm">
+  <h3 id="actTitle"></h3>
+  <div id="actState" style="grid-column:1/-1;font-size:.9em;color:var(--kinari-muted);margin:-.2em 0 .4em"></div>
+  <div id="actBtns" style="display:flex;flex-direction:column;gap:.5em;width:100%;grid-column:1/-1"></div>
+</form></dialog>
+<dialog id="editDlg"><form class="f" method="dialog" id="editFrm" autocomplete="off"></form></dialog>
+<dialog id="askDlg"><form class="f" method="dialog" id="askFrm">
+  <h3 id="askMessage"></h3>
+  <div class="wide"><button value="cancel" type="button" autofocus>やめる</button><button value="yes" type="button" class="on">終了</button></div>
+</form></dialog>
+<dialog id="backupDlg"><form class="f" method="dialog" id="bkpFrm">
+  <h3>バックアップ</h3>
+  <p class="wide" id="bkpLastExport" style="margin:0;font-size:.85em"></p>
+  <label>書き出し</label><button type="button" id="bkpExport" style="width:100%">ファイルに保存</button>
+  <label>読み戻し</label><input type="file" id="bkpFile" accept="application/json,.json">
+  <div class="snapshot-head"><strong>アプリの中の控え</strong><button type="button" id="snapshotSave">今の状態を保存</button></div>
+  <div class="snapshot-list" id="snapshotList"></div>
+  <p class="form-note">端末が壊れたときは復元できません。月に一度は「ファイルに保存」も行ってください。</p>
+  <div class="wide hint" id="bkpOrigin" style="font-size:.8em"></div>
+  <div class="wide"><button value="close" type="submit">閉じる</button></div>
+</form></dialog>
+
+<script>
+'use strict';
+/* ---------- 定数・設定 ---------- */
+const CLOSED_WEEKDAYS=[3]; // 水曜日は定休日
+const parse=s=>{const[y,m,d]=s.split('-').map(Number);return new Date(y,m-1,d)};
+const ymd=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+const addDays=(s,n)=>{const d=parse(s);d.setDate(d.getDate()+n);return ymd(d)};
+const mondayOf=s=>{const d=parse(s);d.setDate(d.getDate()-((d.getDay()+6)%7));return ymd(d)}; // 週は月曜始まり
+
+// 定休日判定純粋関数: 指定日が定休日なら翌日以降の開いている日を返す
+function getOpenDate(dStr){
+  let cur=dStr;
+  while(CLOSED_WEEKDAYS.includes(parse(cur).getDay())) cur=addDays(cur,1);
+  return cur;
+}
+
+/* ---------- 共通ユーティリティ・正規化 ---------- */
+const uid=()=>Math.random().toString(36).slice(2,9);
+function normalizeDigits(s){
+  return (s||'').replace(/[０-９]/g, c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0)).trim();
+}
+function normalizeDb(d){
+  if(!d || typeof d !== 'object' || Array.isArray(d)) d = {};
+  const entries = [];
+  if(Array.isArray(d.entries)){
+    for(const rawE of d.entries){
+      if(!rawE || typeof rawE !== 'object' || typeof rawE.date !== 'string') continue;
+      const e = {...rawE};
+      e.id = e.id ? String(e.id) : uid();
+      e.date = String(e.date);
+      e.kind = (e.kind === 'res' || e.kind === 'wait') ? e.kind : 'res';
+      e.name = typeof e.name === 'string' ? e.name : '';
+      e.tel = typeof e.tel === 'string' ? e.tel : '';
+      e.time = typeof e.time === 'string' ? e.time : '';
+      e.note = typeof e.note === 'string' ? e.note : '';
+      e.people = (typeof e.people === 'number' && !isNaN(e.people)) ? e.people : null;
+      e.tables = Array.isArray(e.tables) ? [...new Set(e.tables.map(String))] : [];
+      e.arrived = Boolean(e.arrived);
+      e.gone = Boolean(e.gone);
+      e.called = Boolean(e.called);
+      e.cancelled = Boolean(e.cancelled);
+      entries.push(e);
+    }
+  }
+  const extra = Array.isArray(d.extra) ? d.extra.filter(x => x && typeof x.date === 'string' && x.no).map(x => ({...x, date: String(x.date), no: String(x.no)})) : [];
+  let occ = {};
+  if(d.occ && typeof d.occ === 'object' && !Array.isArray(d.occ)){
+    for(const k in d.occ){
+      occ[k] = Array.isArray(d.occ[k]) ? [...new Set(d.occ[k].map(String))] : [];
+    }
+  }
+  const fs = (typeof d.fs === 'number' && !isNaN(d.fs)) ? Math.max(16, Math.min(24, d.fs)) : 19;
+  return {...d, entries, extra, occ, fs};
+}
+
+/* ---------- 保存 ---------- */
+const KEY='ippei.v1';
+let loadFailed=false;
+const load=()=>{
+  const raw=localStorage.getItem(KEY);
+  if(raw===null) return null;
+  try{
+    const parsed=JSON.parse(raw);
+    if(parsed && typeof parsed==='object' && !Array.isArray(parsed)){
+      return normalizeDb(parsed);
+    }
+    throw new Error('形式が違います');
+  }catch(e){
+    loadFailed=true;
+    try{localStorage.setItem(KEY+'.broken.'+new Date().toISOString().replace(/[:.]/g,'-'),raw)}catch(_e){}
+    return null;
+  }
+};
+let db = load() || {entries:[], extra:[], occ:{}, fs:19};
+db.fs=Math.max(16,Math.min(24,Number(db.fs)||19));
+let undoStack=[], lastSaved=JSON.stringify(db);
+const syncUndoBtn=()=>{const b=document.getElementById('undoBtn');if(b)b.disabled=!undoStack.length};
+const save=()=>{
+  const prevSaved=lastSaved;
+  try{
+    const cur=JSON.stringify(db);
+    localStorage.setItem(KEY,cur);
+    undoStack.push(prevSaved);
+    if(undoStack.length>5)undoStack.shift();
+    lastSaved=cur;
+    syncUndoBtn();
+  }catch(e){
+    try{db=JSON.parse(prevSaved)}catch(_err){}
+    draw();
+    const quota=e.name==='QuotaExceededError'||/quota|exceeded/i.test(e.message||'');
+    alert(quota
+      ? '保存容量がいっぱいです。今の変更はまだ保存されていません。バックアップからファイルに保存してください。'
+      : '保存できませんでした。\n'+e.message+'\n\n※ 今の変更はまだ保存されていません。');
+  }
+};
+function undo(){
+  if(!undoStack.length) return;
+  const prev=undoStack[undoStack.length-1];
+  try{
+    localStorage.setItem(KEY,prev);
+    undoStack.pop();
+    lastSaved=prev;
+    db=JSON.parse(prev);
+    syncUndoBtn();
+    document.querySelectorAll('dialog[open]').forEach(d=>d.close());
+    draw();
+    const h=document.getElementById('hint');
+    if(h){h.textContent='1つ前に戻しました';setTimeout(()=>{if(h.textContent==='1つ前に戻しました')h.textContent=''},1500)}
+  }catch(e){
+    const quota=e.name==='QuotaExceededError'||/quota|exceeded/i.test(e.message||'');
+    alert(quota
+      ? '保存容量がいっぱいです。今の変更はまだ保存されていません。バックアップからファイルに保存してください。'
+      : '保存できませんでした。\n'+e.message+'\n\n※ 今の変更はまだ保存されていません。');
+  }
+}
+
+addEventListener('storage',ev=>{
+  if(ev.key!==KEY||!ev.newValue||ev.newValue===lastSaved) return;
+  document.querySelectorAll('dialog[open]').forEach(d=>d.close());
+  db=JSON.parse(ev.newValue);lastSaved=ev.newValue;undoStack=[];syncUndoBtn();draw();
+  const h=document.getElementById('hint');
+  if(h){h.textContent='別の画面で変更されたため、最新の内容に更新しました';setTimeout(()=>{if(h)h.textContent=''},3000)}
+});
+
+/* ---------- バックアップ ---------- */
+function exportText(data=db){return JSON.stringify({v:1,exportedAt:new Date().toISOString(),data})}
+function downloadText(text,name){
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([text],{type:'application/json'}));
+  a.download=name;
+  a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+}
+function saveTextToFiles(text,name){
+  const file=new File([text],name,{type:'application/json'});
+  if(navigator.canShare?.({files:[file]})){
+    return navigator.share({files:[file]}).then(()=>true).catch(err=>{
+      if(err?.name==='AbortError') return false;
+      downloadText(text,name);return true;
+    });
+  }
+  downloadText(text,name);
+  return Promise.resolve(true);
+}
+function importText(text){
+  let obj;
+  try{obj=JSON.parse(text)}catch(_e){return false}
+  if(!obj||obj.v!==1||!obj.data||typeof obj.data!=='object'||Array.isArray(obj.data)) return false;
+  if('entries' in obj.data && !Array.isArray(obj.data.entries)) return false;
+  db=normalizeDb(obj.data);
+  return true;
+}
+
+/* ---------- アプリ内の控え ---------- */
+const EXPORT_REMIND_DAYS=14;
+function exportStaleDays(at=db.lastExport){
+  if(!at) return Infinity;
+  const d=Math.floor((parse(today())-parse(at))/86400000);
+  return d<0?0:d;
+}
+const SNAPSHOT_DB='ippei', SNAPSHOT_STORE='snapshots', SNAPSHOT_MAX=14;
+function pruneSnapshots(list,max){
+  const sorted=[...list].sort((a,b)=>String(a.at).localeCompare(String(b.at)));
+  const cut=Math.max(0,sorted.length-max);
+  return {keep:sorted.slice(cut),remove:sorted.slice(0,cut)};
+}
+function snapshotsDb(){return new Promise((resolve,reject)=>{
+  const r=indexedDB.open(SNAPSHOT_DB,1);
+  r.onupgradeneeded=()=>{if(!r.result.objectStoreNames.contains(SNAPSHOT_STORE))r.result.createObjectStore(SNAPSHOT_STORE,{keyPath:'id'})};
+  r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);
+})}
+function listSnapshots(){return snapshotsDb().then(d=>new Promise((resolve,reject)=>{
+  const r=d.transaction(SNAPSHOT_STORE).objectStore(SNAPSHOT_STORE).getAll();
+  r.onsuccess=()=>{d.close();resolve(r.result)};r.onerror=()=>{d.close();reject(r.error)};
+}))}
+function writeSnapshot(snapshot,remove){return snapshotsDb().then(d=>new Promise((resolve,reject)=>{
+  const tx=d.transaction(SNAPSHOT_STORE,'readwrite'),store=tx.objectStore(SNAPSHOT_STORE);
+  store.put(snapshot);remove.forEach(s=>store.delete(s.id));
+  tx.oncomplete=()=>{d.close();resolve()};tx.onerror=()=>{d.close();reject(tx.error)};
+}))}
+const formatSnapshotAt=at=>{const d=new Date(at);return `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`};
+function hasAutoSnapshotOn(list,day){return list.some(s=>s.kind==='auto'&&ymd(new Date(s.at))===day)}
+async function renderSnapshots(){
+  const list=$('snapshotList');list.replaceChildren();
+  try{
+    const snapshots=(await listSnapshots()).sort((a,b)=>String(b.at).localeCompare(String(a.at)));
+    if(!snapshots.length){list.textContent='まだ控えはありません';return}
+    snapshots.forEach(snapshot=>{
+      const row=document.createElement('div'),info=document.createElement('span'),restore=document.createElement('button');
+      row.className='snapshot-row';info.textContent=`${formatSnapshotAt(snapshot.at)}  予約 ${snapshot.count}件  ${snapshot.kind==='auto'?'自動':'手動'}`;
+      restore.type='button';restore.textContent='戻す';restore.onclick=()=>restoreSnapshot(snapshot);
+      row.append(info,restore);list.appendChild(row);
+    });
+  }catch(_e){list.textContent='控えを表示できませんでした'}
+}
+async function saveSnapshot(kind='manual',currentList,snap){
+  const at=new Date().toISOString();
+  const snapshot={id:at,at,kind,count:snap?snap.count:db.entries.length,text:snap?snap.text:exportText()};
+  try{
+    const list=currentList||await listSnapshots(),pruned=pruneSnapshots([...list,snapshot],SNAPSHOT_MAX);
+    await writeSnapshot(snapshot,pruned.remove);await renderSnapshots();
+    return true;
+  }catch(err){
+    $('snapshotList').textContent='控えを保存できませんでした';
+    throw err;
+  }
+}
+async function createDailySnapshot(){
+  try{const list=await listSnapshots();if(!hasAutoSnapshotOn(list,today()))await saveSnapshot('auto',list)}catch(_e){}
+}
+function restoreSnapshot(snapshot){
+  confirmThen(`${formatSnapshotAt(snapshot.at)} の控えに戻します。今の状態は控えに残します。`,async ()=>{
+    try{
+      await saveSnapshot('manual');
+      if(importText(snapshot.text)){save();draw();bkpDlg.close()}
+      else $('snapshotList').textContent='この控えは読み戻せませんでした';
+    }catch(_e){
+      alert('現在の状態を控えに保存できなかったため、復元を中止しました。');
+    }
+  },'戻す');
+}
+
+/* ---------- 日付 ---------- */
+let today=()=>ymd(new Date());
+let lastToday=today();
+const WD=['日','月','火','水','木','金','土'];
+let date=getOpenDate(today()), weekStart=mondayOf(date);
+
+function checkDayChange(){
+  const nowToday=today();
+  if(nowToday!==lastToday){
+    const wasToday=(date===getOpenDate(lastToday));
+    lastToday=nowToday;
+    if(wasToday){
+      date=getOpenDate(nowToday);
+      weekStart=mondayOf(date);
+    }
+    document.querySelectorAll('dialog[open]').forEach(d=>d.close());
+    draw();
+    createDailySnapshot();
+  }
+}
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)checkDayChange()});
+setInterval(checkDayChange,60000);
+
+/* ---------- 席 ---------- */
+const ROWS=[
+  {lab:'座敷',  nos:['17','18','19','20']},
+  {lab:'小上り',nos:['11','12','13','14','15','16']},
+  {lab:'テーブル',nos:['8','9','10']},
+  {lab:'カウンター',nos:['1','2','3','4','5','6','7']},
+];
+const extraOf=d=>db.extra.filter(x=>x.date===d).map(x=>x.no);
+const occOf=d=>(db.occ[d]||(db.occ[d]=[]));
+const addExtra=(d,no)=>{
+  const all=ROWS.flatMap(r=>r.nos).concat(extraOf(d));
+  if(all.includes(no)) return false;
+  db.extra.push({date:d,no});
+  return true;
+};
+
+/* ---------- 参照 ---------- */
+const hue=id=>{let h=0;for(const c of id)h=(h*31+c.charCodeAt(0))%46;return h};
+const color=id=>`hsl(${hue(id)} 58% 50%)`;
+const ofDay=(d,kind)=>db.entries.filter(e=>e.date===d&&(!kind||e.kind===kind)&&!e.cancelled&&!e.gone);
+const listEntries=(d,kind)=>ofDay(d,kind).filter(e=>e.tables.length===0);
+const byId=id=>db.entries.find(e=>e.id===id);
+
+/* ---------- 描画 ---------- */
+function drawDates(){
+  const el=document.getElementById('dates');el.innerHTML='';
+  for(let i=0;i<7;i++){
+    const s=addDays(weekStart,i), d=parse(s), w=d.getDay();
+    if(CLOSED_WEEKDAYS.includes(w)) continue; // 水曜日（定休日）は出さない
+    const b=document.createElement('button');
+    b.className=(s===date?'on ':'')+(w===0?'sun':w===6?'sat':'');
+    b.dataset.date=s;
+    b.innerHTML=`${d.getMonth()+1}/${d.getDate()}<small>${WD[w]}${s===today()?' 今日':''}</small>`;
+    b.onclick=()=>{date=s;weekStart=mondayOf(s);draw()};
+    el.appendChild(b);
+  }
+}
+
+function itemEl(e){
+  const isWait=e.kind==='wait';
+  const div=document.createElement('div');
+  div.className='item'+(isWait?' wait':'');
+  div.dataset.entryId=e.id;
+  div.style.borderLeftColor=isWait?'var(--karashi)':color(e.id);
+  const meta=[e.time||'時間未定', e.people?e.people+'名':'人数未定', e.tel].filter(Boolean).join(' / ');
+  div.innerHTML=`<div class="l1"><span class="nm"></span><span class="mt"></span></div>
+    <div class="tbl"></div><div class="note mt"></div><div class="acts"></div>`;
+  const nmEl=div.querySelector('.nm');
+  nmEl.textContent=e.name;
+  if(isWait){
+    const badge=document.createElement('span');
+    badge.className='badge';
+    badge.textContent=e.called?'連絡済':'電話待ち';
+    nmEl.after(badge);
+  }
+  const handle=document.createElement('button');handle.type='button';handle.className='drag-handle';handle.textContent='⠿';
+  handle.setAttribute('aria-label',`${e.name} を卓へドラッグ`);handle.dataset.entryId=e.id;
+  bindDrag(div,{type:'add',entryId:e.id},e.name);bindDrag(handle,{type:'add',entryId:e.id},e.name);div.querySelector('.l1').prepend(handle);
+  div.querySelector('.mt').textContent=meta;
+  div.querySelector('.tbl').textContent='卓未定';
+  div.querySelector('.note').textContent=e.note||'';
+  const acts=div.querySelector('.acts');
+  const add=(t,fn)=>{const b=document.createElement('button');b.textContent=t;b.onclick=ev=>{ev.stopPropagation();fn()};acts.appendChild(b)};
+  if(isWait&&!e.called) add('連絡済',()=>{e.called=true;save();draw()});
+  if(isWait&&e.called)  add('連絡済 ✓',()=>{e.called=false;save();draw()});
+  if(isWait){
+    add('待ち解除',()=>{e.kind='res';save();draw()});
+  }else{
+    add('電話待ちにする',()=>{
+      if(e.tel&&e.tel.trim()){
+        e.kind='wait';e.called=false;save();draw();
+      }else{
+        openForm('wait',e);
+      }
+    });
+  }
+  add('取消',()=>cancelEntry(e));
+  div.onclick=()=>openForm(e.kind,e);
+  return div;
+}
+
+function drawLists(){
+  const box=document.getElementById('resList');box.innerHTML='';
+  const arr=listEntries(date);
+  if(!arr.length){box.innerHTML='<div class="empty">卓未定なし</div>';}
+  else{
+    arr.sort((a,b)=>(a.time||'zz').localeCompare(b.time||'zz'));
+    arr.forEach(e=>box.appendChild(itemEl(e)));
+  }
+  const vanished=db.entries.filter(e=>e.date===date&&(e.cancelled||e.gone)).slice().reverse();
+  document.getElementById('cxHead').firstChild.textContent=`終了・取消 (${vanished.length}) `;
+  const cxBtn=document.getElementById('cxToggle');
+  const cl=document.getElementById('cxList');
+  if(!vanished.length){
+    if(cxBtn){
+      cxBtn.disabled=true;
+      cxBtn.textContent='表示';
+    }
+    cl.hidden=true;
+    cl.innerHTML='<div class="empty">なし</div>';
+  } else {
+    if(cxBtn) cxBtn.disabled=false;
+    cl.innerHTML='';
+    vanished.forEach(e=>{
+      const d=document.createElement('div');
+      d.className='item';
+      d.style.borderLeftColor='#aaa';
+      const st=e.cancelled?'取消':'終了';
+      const meta=[e.time||'時間未定', e.people?e.people+'名':'人数未定', st].filter(Boolean).join(' / ');
+      const tblStr=e.tables&&e.tables.length?'卓 '+e.tables.join(', '):'卓未定';
+      d.innerHTML=`<div class="l1"><span class="nm"></span><span class="mt"></span></div>
+        <div class="tbl"></div><div class="acts"></div>`;
+      d.querySelector('.nm').textContent=e.name;
+      d.querySelector('.mt').textContent=meta;
+      d.querySelector('.tbl').textContent=tblStr;
+      const b=document.createElement('button');
+      b.type='button';
+      b.textContent=e.gone ? '使用中に戻す' : '予約に戻す';
+      b.onclick=()=>{
+        const allNos=ROWS.flatMap(r=>r.nos).concat(extraOf(e.date));
+        const missing=e.tables.filter(no=>!allNos.includes(no));
+        e.tables=e.tables.filter(no=>allNos.includes(no));
+
+        if(e.cancelled) e.cancelled=false;
+        if(e.gone){
+          e.gone=false;
+          if(e.tables.length>0){
+            e.arrived=true;
+            if(e.date===today()){
+              e.tables.forEach(no=>setOcc(no,true));
+            }
+          } else {
+            e.arrived=false;
+          }
+        }
+        if(missing.length>0 && e.tables.length===0){
+          e.arrived=false;
+          const h=document.getElementById('hint');
+          if(h){
+            const mText=`卓${missing.join(',')}が無いので卓未定に戻しました`;
+            h.textContent=mText;
+            setTimeout(()=>{if(h.textContent===mText)h.textContent=''},3000);
+          }
+        }
+        save();
+        draw();
+      };
+      d.querySelector('.acts').appendChild(b);
+      cl.appendChild(d);
+    });
+  }
+}
+
+function openMoreDlg(entries,no){
+  const dlg=$('actDlg'), title=$('actTitle'), stateEl=$('actState'), box=$('actBtns');
+  title.textContent=`卓 ${no} の予約一覧`;
+  stateEl.textContent='操作する予約を選んでください';
+  box.replaceChildren();
+  entries.forEach(e=>{
+    const b=document.createElement('button');
+    b.type='button';
+    const meta=[e.time||'時間未定', e.people?e.people+'名':'人数未定'].filter(Boolean).join(' / ');
+    b.textContent=`${e.name}（${meta}）`;
+    b.onclick=()=>{dlg.close();openActDlg(e,no)};
+    box.appendChild(b);
+  });
+  const closeBtn=document.createElement('button');
+  closeBtn.type='button';
+  closeBtn.textContent='閉じる';
+  closeBtn.onclick=()=>dlg.close();
+  box.appendChild(closeBtn);
+  dlg.showModal();
+}
+
+function seatEl(no){
+  const b=document.createElement('button');
+  b.dataset.no=no;
+  const isToday=date===today();
+  const here=db.entries.filter(e=>e.date===date&&!e.cancelled&&!e.gone&&e.tables.includes(no));
+  // 青は「来店済みの予約がこの卓にあるか」で決める。
+  const used=here.some(e=>e.arrived);
+  const hasArrived=isToday&&used;
+  const hasNext=hasArrived&&here.some(e=>!e.arrived);
+  const hasRes=!used&&here.length>0;
+  b.className='seat'+(used&&isToday?' used':'')+(hasNext?' has-next':'')+(hasRes?' has-res':'');
+  const nextBadge=hasNext?'<span class="badge next">次</span>':'';
+  b.innerHTML=`<div class="no"><span></span>${used&&isToday?'<em>使用中</em>':''}${nextBadge}</div><div class="as"></div>`;
+  b.querySelector('.no span').textContent=no;
+  const as=b.querySelector('.as');
+  if(here.length===0){
+    const emptyEl=document.createElement('div');
+    emptyEl.className='seat-empty';
+    emptyEl.textContent='＋ 予約';
+    as.appendChild(emptyEl);
+  } else {
+    // チップの並び: 来店済みを上、「次」を下にする（here を arrived 優先で並べてから slice(0,2)）
+    here.sort((a,b)=>(b.arrived?1:0) - (a.arrived?1:0));
+    here.slice(0,2).forEach(e=>{
+      const isNext=hasArrived&&!e.arrived;
+      const isWait=e.kind==='wait';
+      const c=document.createElement('div');
+      c.className='chip'+(here.length>1?' two-line':' solo')+(e.arrived?' arrived':'')+(isNext?' next':'');
+      c.style.borderLeftColor=isNext?'var(--moegi)':(e.arrived?'var(--ao)':(isWait?'var(--karashi)':color(e.id)));
+      c.innerHTML='<div class="l1"><b class="chip-name"></b></div><div class="chip-meta"><span class="chip-people"></span></div>';
+      if(isNext){
+        const nb=document.createElement('span');
+        nb.className='badge next';
+        nb.textContent='次';
+        c.querySelector('.chip-name').before(nb);
+      } else if(isWait && !e.arrived){
+        const wb=document.createElement('span');
+        wb.className='badge';
+        wb.textContent=e.called?'連絡済':'電話待ち';
+        c.querySelector('.chip-name').before(wb);
+      }
+      c.querySelector('.chip-name').textContent=e.name;
+      c.querySelector('.chip-people').textContent=e.people?e.people+'名':'人数未定';
+      if(e.time){const time=document.createElement('span');time.className='chip-time';time.textContent=e.time;c.querySelector('.chip-meta').appendChild(time)}
+      const note1=(e.note||'').split('\n')[0].trim();
+      if(note1){const n=document.createElement('div');n.className='chip-note';n.textContent=note1;c.appendChild(n)}
+      c.dataset.entryId=e.id;c.dataset.from=no;
+      c.setAttribute('aria-label',`${e.name} を卓または保留へドラッグ`);
+      bindDrag(c,{type:'move',entryId:e.id,from:no},e.name);
+      // チップのどこをタップしても状態ボタン画面を開く
+      c.onclick=ev=>{ev.stopPropagation();openActDlg(e,no)};
+      as.appendChild(c);
+    });
+    if(here.length>2){
+      const more=document.createElement('div');more.className='chip';more.textContent=`他 ${here.length-2}件`;
+      more.style.cursor='pointer';
+      more.onclick=ev=>{
+        ev.stopPropagation();
+        openMoreDlg(here,no);
+      };
+      as.appendChild(more);
+    }
+  }
+  // 卓マスのチップ以外をタップ：予約入力が開く（空席タップで使用中の切り替えはしない）
+  b.onclick=()=>openForm('res',null,date,no);
+  return b;
+}
+
+function drawMap(){
+  const m=document.getElementById('map');m.innerHTML='';
+  const zashiki=document.createElement('div');zashiki.className='zashiki-column';
+  ROWS[0].nos.forEach(no=>zashiki.appendChild(seatEl(no)));
+  m.appendChild(zashiki);
+  const main=document.createElement('div');main.className='main-map';
+  const rows=ROWS.slice(1);
+  const ex=extraOf(date); if(ex.length) rows.push({lab:'追加',nos:ex,extra:true});
+  rows.forEach(r=>{
+    const row=document.createElement('div');row.className='row';row.setAttribute('aria-label',r.lab);
+    r.nos.forEach(no=>{
+      const s=seatEl(no);
+      if(r.extra){
+        const wrap=document.createElement('div');wrap.className='extra';wrap.appendChild(s);
+        const del=document.createElement('button');del.className='extra-del';del.textContent='×';
+        del.setAttribute('aria-label',`追加席 ${no} を削除`);del.onclick=()=>delExtra(no);wrap.appendChild(del);
+        row.appendChild(wrap);
+      } else row.appendChild(s);
+    });
+    main.appendChild(row);
+  });
+  m.appendChild(main);
+}
+
+function draw(){
+  document.documentElement.style.setProperty('--fs',db.fs+'px');
+  const stale=exportStaleDays();
+  const bkpBtn=$('bkpOpen');
+  bkpBtn.classList.toggle('warn',stale>=EXPORT_REMIND_DAYS);
+  bkpBtn.textContent='バックアップ';
+  drawDates();
+  const notTodayBar=$('notTodayBar');
+  if(date!==today()){
+    const d=parse(date), w=d.getDay();
+    notTodayBar.hidden=false;
+    notTodayBar.textContent=`${d.getMonth()+1}/${d.getDate()}（${WD[w]}）の席 ― 今日ではありません`;
+  } else {
+    notTodayBar.hidden=true;
+  }
+  const bodyEl=document.getElementById('body');
+  bodyEl.classList.toggle('left-off',!!db.leftOff);
+  const grip=$('grip');
+  grip.textContent=db.leftOff?'一覧を出す':'一覧をしまう';
+  grip.setAttribute('aria-label',db.leftOff?'一覧を出す':'一覧をしまう');
+  drawLists();
+  drawMap();
+}
+
+/* ---------- 操作 ---------- */
+function confirmThen(message,onYes,yesLabel='終了'){
+  const dlg=$('askDlg');
+  $('askMessage').textContent=message;
+  dlg.querySelector('button[value="cancel"]').onclick=()=>dlg.close();
+  dlg.querySelector('button[value="yes"]').textContent=yesLabel;
+  dlg.querySelector('button[value="yes"]').onclick=()=>{dlg.close();onYes()};
+  dlg.showModal();
+}
+function seatGroup(no, d = date){
+  const row=ROWS.find(r=>r.nos.includes(no));
+  return row ? row.lab : (extraOf(d).includes(no)?'追加':null);
+}
+function validTables(tables, d = date){
+  const a=[...new Set(tables.map(String))].sort((x,y)=>Number(x)-Number(y));
+  if(!a.length) return true;
+  const group=seatGroup(a[0], d);
+  return !!group && a.every(no=>seatGroup(no, d)===group);
+}
+function assignTables(e,tables, d = (e?.date || date)){
+  const a=[...new Set(tables.map(String))].sort((x,y)=>Number(x)-Number(y));
+  if(!validTables(a, d)) return false;
+  const before=e.tables.slice();e.tables=a;
+  if(e.arrived&&d===today()){
+    before.filter(no=>!a.includes(no)).forEach(no=>setOcc(no,false));
+    a.forEach(no=>setOcc(no,true));
+  }
+  return true;
+}
+function unassign(e){
+  const before=e.tables.slice();e.tables=[];e.arrived=false;e.gone=false;
+  if(date===today()||(e?.date&&e.date===today())) before.forEach(no=>setOcc(no,false));
+  return true;
+}
+function moveTable(e,from,to){
+  if(from===to || e.tables.includes(to)) return false;
+  const i=e.tables.indexOf(from);if(i<0) return false;
+  const tables=e.tables.slice();tables[i]=to;
+  if(!validTables(tables, e.date)) return false;
+  e.tables=tables.sort((a,b)=>Number(a)-Number(b));
+  if(e.arrived&&e.date===today()){setOcc(from,false);setOcc(to,true)}
+  return true;
+}
+function setOcc(no,on){
+  const o=occOf(date), i=o.indexOf(no);
+  if(on){ if(i<0) o.push(no) }
+  else{
+    if(i>=0) o.splice(i,1);
+  }
+}
+function arrive(e){
+  if(!e.tables.length) return false;
+  e.arrived=true;
+  if(date===today()) e.tables.forEach(no=>setOcc(no,true));
+  save();draw();return true;
+}
+function leave(e){
+  e.arrived=false;e.gone=true;
+  e.tables.forEach(no=>setOcc(no,false));
+  save();draw();
+}
+// 取消はどこから押しても ここを通す。来店済みを取消したら使用中も外す（2026-09-26、青いまま戻らなかった）
+function cancelEntry(e){
+  e.cancelled=true;
+  if(e.arrived){e.arrived=false;e.tables.forEach(no=>setOcc(no,false))}  // cancelledを先に立てて、追加席の自動削除が効くようにする
+  save();draw();
+}
+function delExtra(no){
+  const hasRes=db.entries.some(e=>e.date===date&&!e.cancelled&&!e.gone&&e.tables.includes(no));
+  if(hasRes){
+    const h=document.getElementById('hint');
+    if(h){
+      h.textContent='予約が入っている臨時席は消せません。先に予約を別の卓へ移してください';
+      setTimeout(()=>{if(h.textContent.includes('予約が入っている臨時席'))h.textContent=''},3000);
+    }
+    return;
+  }
+  db.extra=db.extra.filter(x=>!(x.date===date&&x.no===no));
+  setOcc(no,false);save();draw();
+}
+
+/* ---------- 状態ダイアログ (#actDlg) ---------- */
+function openActDlg(e,no){
+  const dlg=$('actDlg'), title=$('actTitle'), stateEl=$('actState'), box=$('actBtns');
+  const nTbl=e.tables.length;
+  const tblStr=e.tables.join('・')||String(no);
+  title.textContent=`${e.name}（卓 ${tblStr}）`; // 25.1: textContent で挿入
+  stateEl.textContent=`いま：${e.arrived ? '使用中' : 'まだ来店していない予約'}`;
+  box.replaceChildren();
+  const isToday=date===today();
+  const addBtn=(label,cls,fn)=>{
+    const b=document.createElement('button');
+    b.type='button';b.textContent=label;
+    if(cls) b.className=cls;
+    b.onclick=()=>{dlg.close();fn()};
+    box.appendChild(b);
+  };
+  if(isToday && !e.arrived) addBtn(nTbl>1 ? `全${nTbl}卓を使用中にする` : '使用中にする','on',()=>{arrive(e)});
+  if(isToday && e.arrived)  addBtn(nTbl>1 ? `全${nTbl}卓を食事終了` : '食事終了','on',()=>{leave(e)});
+  if(e.kind==='wait' && !e.arrived){
+    if(!e.called) addBtn('連絡済にする','',()=>{e.called=true;save();draw()});
+    else addBtn('連絡済を外す','',()=>{e.called=false;save();draw()});
+  }
+  addBtn('編集','',()=>{openEdit(e,no)});
+  addBtn('予約を取り消す','btn-cancel-act',()=>cancelEntry(e));
+  addBtn('閉じる','',()=>{});
+  dlg.showModal();
+}
+
+/* ---------- ドラッグ＆ドロップ ---------- */
+let drag=null,pendingDrag=null;
+function notifyMoved(name,toNo){
+  const h=document.getElementById('hint');
+  if(h){
+    h.textContent=`${name}を卓${toNo}へ移しました`;
+    setTimeout(()=>{if(h.textContent.includes('へ移しました'))h.textContent=''},2000);
+  }
+}
+function bindDrag(el,data,label){el.addEventListener('pointerdown',ev=>{
+  if(drag||pendingDrag||ev.button!==0) return;
+  pendingDrag={...data,pointerId:ev.pointerId,source:el,label,x:ev.clientX,y:ev.clientY};
+})}
+function startDrag(ev,state){
+  if(drag) return;
+  ev.preventDefault();ev.stopPropagation();
+  state.source.addEventListener('click',e=>{e.preventDefault();e.stopImmediatePropagation()},{capture:true,once:true});
+  const preview=document.createElement('div');preview.className='drag-preview';preview.textContent=state.label;document.body.appendChild(preview);
+  drag={...state,preview};
+  drag.source.classList.add('dragging');try{drag.source.setPointerCapture?.(ev.pointerId)}catch(_e){}moveDrag(ev);
+}
+function dragSeat(ev){
+  const at=document.elementFromPoint(ev.clientX,ev.clientY);
+  return at&&at.closest('.seat');
+}
+function dragList(ev){
+  const at=document.elementFromPoint(ev.clientX,ev.clientY);
+  return at&&at.closest('#resList');
+}
+function moveDrag(ev){
+  if(!drag&&pendingDrag&&ev.pointerId===pendingDrag.pointerId){
+    if(Math.hypot(ev.clientX-pendingDrag.x,ev.clientY-pendingDrag.y)<12) return;
+    const state=pendingDrag;pendingDrag=null;startDrag(ev,state);
+  }
+  if(!drag||ev.pointerId!==drag.pointerId) return;
+  drag.preview.style.left=ev.clientX+'px';drag.preview.style.top=ev.clientY+'px';
+  document.querySelectorAll('.seat.drop-tgt,.list.drop-tgt').forEach(el=>el.classList.remove('drop-tgt'));
+  const seat=dragSeat(ev), list=dragList(ev);
+  if(seat) seat.classList.add('drop-tgt');
+  else if(drag.type==='move'&&list) list.classList.add('drop-tgt');
+}
+function clearDrag(){
+  pendingDrag=null;
+  if(!drag) return;
+  drag.preview.remove();drag.source.classList.remove('dragging');
+  document.querySelectorAll('.seat.drop-tgt,.list.drop-tgt').forEach(el=>el.classList.remove('drop-tgt'));drag=null;
+}
+function endDrag(ev){
+  if(!drag&&pendingDrag&&ev.pointerId===pendingDrag.pointerId){pendingDrag=null;return}
+  if(!drag||ev.pointerId!==drag.pointerId) return;
+  const state=drag, seat=dragSeat(ev), list=dragList(ev), no=seat&&seat.dataset.no, e=byId(state.entryId);
+  let changed=e&&(no?(state.type==='add'?assignTables(e,[no]):moveTable(e,state.from,no)):state.type==='move'&&list&&unassign(e));
+  clearDrag();
+  if(changed){
+    save();draw();
+    if(no&&e) notifyMoved(e.name,no);
+  }
+}
+document.addEventListener('pointermove',moveDrag);
+document.addEventListener('pointerup',endDrag);
+document.addEventListener('pointercancel',clearDrag);
+function dragFromTo(source,target){
+  const a=source.getBoundingClientRect(),b=target.getBoundingClientRect(),id=99;
+  const fire=(el,type,r)=>el.dispatchEvent(new PointerEvent(type,{bubbles:true,cancelable:true,pointerId:id,pointerType:'touch',isPrimary:true,buttons:1,clientX:r.left+r.width/2,clientY:r.top+r.height/2}));
+  fire(source,'pointerdown',a);fire(source,'pointermove',b);fire(source,'pointerup',b);
+}
+
+/* ---------- 入力フォーム ---------- */
+const TIMES=(()=>{const a=[];for(let h=17;h<=21;h++)for(const m of['00','30'])a.push(h+':'+m);return a})();
+const PEOPLE_MAX=50;
+
+function createPeoplePicker(initialVal, syncInput){
+  const wrap=document.createElement('div');
+  wrap.className='btn-group';
+  let curVal = (initialVal!==undefined && initialVal!==null && initialVal!=='') ? Number(initialVal) : null;
+  const isMore = curVal !== null && curVal >= 9;
+
+  const mkBtn=(text, val, on)=>{
+    const b=document.createElement('button');
+    b.type='button'; b.className='p-btn'+(on?' on':'');
+    b.textContent=text; b.dataset.val=val;
+    return b;
+  };
+
+  const moreInput=document.createElement('input');
+  moreInput.type='number'; moreInput.min='9'; moreInput.max='99';
+  moreInput.name='peopleMore';
+  moreInput.autocomplete='off';
+  moreInput.style.cssText='width:4.5em;display:'+(isMore?'inline-block':'none');
+  moreInput.placeholder='人数';
+  if(isMore) moreInput.value=curVal;
+
+  const btns=[];
+  btns.push(mkBtn('未定', '', curVal===null));
+  for(let n=1; n<=8; n++){
+    btns.push(mkBtn(String(n), String(n), curVal===n));
+  }
+  const moreBtn=mkBtn('9名以上', 'more', isMore);
+  btns.push(moreBtn);
+
+  const updateSync=()=>{
+    if(!syncInput) return;
+    const v=picker.getValue();
+    syncInput.value = v===null ? '' : String(v);
+  };
+
+  btns.forEach(b=>{
+    b.onclick=()=>{
+      btns.forEach(x=>x.classList.remove('on'));
+      b.classList.add('on');
+      if(b.dataset.val==='more'){
+        moreInput.style.display='inline-block';
+        moreInput.focus();
+      } else {
+        moreInput.style.display='none';
+      }
+      updateSync();
+    };
+    wrap.appendChild(b);
+  });
+  moreInput.oninput=updateSync;
+  wrap.appendChild(moreInput);
+
+  const picker = {
+    el: wrap,
+    getValue: ()=>{
+      const active=btns.find(b=>b.classList.contains('on'));
+      if(!active || !active.dataset.val) return null;
+      if(active.dataset.val==='more'){
+        const v=parseInt(moreInput.value,10);
+        return isNaN(v)?null:v;
+      }
+      return parseInt(active.dataset.val,10);
+    },
+    setValue: (val)=>{
+      curVal = (val!==undefined && val!==null && val!=='') ? Number(val) : null;
+      const m = curVal !== null && curVal >= 9;
+      btns.forEach(b=>{
+        if(curVal===null) b.classList.toggle('on', b.dataset.val==='');
+        else if(m) b.classList.toggle('on', b.dataset.val==='more');
+        else b.classList.toggle('on', b.dataset.val===String(curVal));
+      });
+      moreInput.style.display=m?'inline-block':'none';
+      moreInput.value=m?curVal:'';
+      updateSync();
+    }
+  };
+  updateSync();
+  return picker;
+}
+
+function createTimePicker(initialVal, syncInput){
+  const wrap=document.createElement('div');
+  wrap.className='time-picker';
+  wrap.style.cssText='display:flex;flex-direction:column;gap:4px';
+  const topRow=document.createElement('div');
+  topRow.style.cssText='display:flex;gap:4px';
+  const grid=document.createElement('div');
+  grid.className='btn-grid cols-5';
+
+  const mkBtn=(text, val, on)=>{
+    const b=document.createElement('button');
+    b.type='button'; b.className='t-btn'+(on?' on':'');
+    b.textContent=text; b.dataset.val=val;
+    return b;
+  };
+
+  const btns=[];
+  let curVal = initialVal || '';
+  const undBtn = mkBtn('未定', '', !curVal);
+  undBtn.style.cssText='flex:none;width:5em';
+  btns.push(undBtn);
+  topRow.appendChild(undBtn);
+
+  let customBtn = null;
+  if(curVal && !TIMES.includes(curVal)){
+    customBtn = mkBtn(curVal, curVal, true);
+    btns.push(customBtn);
+    grid.appendChild(customBtn);
+  }
+
+  TIMES.forEach(t=>{
+    const b=mkBtn(t, t, curVal===t);
+    btns.push(b);
+    grid.appendChild(b);
+  });
+
+  const updateSync=()=>{
+    if(!syncInput) return;
+    syncInput.value = picker.getValue();
+  };
+
+  const bindBtn=(b)=>{
+    b.onclick=()=>{
+      btns.forEach(x=>x.classList.remove('on'));
+      b.classList.add('on');
+      updateSync();
+    };
+  };
+  btns.forEach(bindBtn);
+
+  wrap.append(topRow, grid);
+  const picker = {
+    el: wrap,
+    getValue: ()=>{
+      const active=btns.find(b=>b.classList.contains('on'));
+      return active ? active.dataset.val : '';
+    },
+    setValue: (val)=>{
+      const v = val || '';
+      if(v && !TIMES.includes(v)){
+        if(!customBtn){
+          customBtn = mkBtn(v, v, true);
+          btns.unshift(customBtn);
+          bindBtn(customBtn);
+          grid.prepend(customBtn);
+        } else {
+          customBtn.textContent = v;
+          customBtn.dataset.val = v;
+        }
+      }
+      btns.forEach(b=>b.classList.toggle('on', b.dataset.val===v));
+      updateSync();
+    }
+  };
+  updateSync();
+  return picker;
+}
+
+function openForm(kind,e,forDate,seatNo){
+  const d=forDate||date;
+  const f=document.getElementById('frm');
+  const isSeat=seatNo!==undefined&&seatNo!==null;
+  const isWaitInitial=!isSeat && (kind==='wait' || e?.kind==='wait');
+  const isToday=d===today();
+  const nameRequired=isSeat?!isToday:true;
+
+  let title='';
+  if(isSeat){
+    const dObj=parse(d);
+    title=`予約：卓 ${seatNo}（${dObj.getMonth()+1}/${dObj.getDate()}）`;
+  } else {
+    title=`${e?'編集':'新規'}：予約（${d}）`;
+  }
+
+  const nameLabelText = isToday ? '名前（空欄なら来店客）' : '名前*';
+
+  f.innerHTML=`<h3>${title}</h3>
+   <label id="nameLbl">${nameLabelText}</label><input name="name" ${nameRequired?'required':''} autofocus autocomplete="off" autocorrect="off" spellcheck="false" ${isSeat&&isToday?'placeholder="空欄で「来店客」として使用中"':''}>
+   <label>人数</label><div id="fPeoplePicker"></div><input type="hidden" name="people" autocomplete="off">
+   <label>時間</label><div id="fTimePicker"></div><input type="hidden" name="time" autocomplete="off">
+   ${isSeat?'':'<label>電話待ち</label><input type="checkbox" name="wait" autocomplete="off" style="width:auto;justify-self:start" '+(isWaitInitial?'checked':'')+'>'}
+   <label>電話番号<span class="tel-req" ${isWaitInitial?'':'hidden'}>*</span></label><input name="tel" type="tel" inputmode="tel" autocomplete="off" ${isWaitInitial?'required':''}>
+   <label>要望</label><textarea name="note" rows="2" autocomplete="off" autocorrect="off" spellcheck="false"></textarea>
+   ${isSeat?'':'<label>卓</label><input name="tables" autocomplete="off" placeholder="空欄なら卓未定">'}
+   ${isSeat?'':'<label>日付</label><input name="date" type="date" required>'}
+   <p class="message" hidden></p>
+   <div class="wide">
+     <button value="ok" type="submit" class="on" id="frmSaveBtn">保存</button>
+     <button value="cancel" type="submit" formnovalidate>閉じる</button>
+   </div>`;
+
+  const saveBtn = f.querySelector('#frmSaveBtn');
+  const updateSaveBtnLabel = () => {
+    if(isSeat){
+      const nv = f.name.value.trim();
+      saveBtn.textContent = (isToday && !nv) ? '来店客として使用中にする' : `卓${seatNo}に予約する`;
+    } else {
+      saveBtn.textContent = '卓未定で保存';
+    }
+  };
+
+  const peoplePick = createPeoplePicker(e?.people, f.people);
+  f.querySelector('#fPeoplePicker').appendChild(peoplePick.el);
+  const timePick = createTimePicker(e?.time, f.time);
+  f.querySelector('#fTimePicker').appendChild(timePick.el);
+
+  if(!isSeat){
+    f.date.value=e?.date??d;
+    if(e?.tables) f.tables.value=e.tables.join(', ');
+    const waitCb=f.querySelector('input[name="wait"]');
+    const telInput=f.querySelector('input[name="tel"]');
+    const telReq=f.querySelector('.tel-req');
+    if(waitCb&&telInput){
+      waitCb.onchange=()=>{
+        telInput.required=waitCb.checked;
+        if(telReq) telReq.hidden=!waitCb.checked;
+      };
+    }
+  }
+  if(e){
+    for(const k of['name','tel','note']) f[k].value=e[k]??'';
+  }
+
+  f.name.oninput = updateSaveBtnLabel;
+  updateSaveBtnLabel();
+
+  f.onkeydown=ev=>{if(ev.key==='Enter'&&ev.isComposing) ev.preventDefault()};
+  const dlg=document.getElementById('dlg');
+  dlg.onclose=null;
+  dlg.showModal();
+
+  f.onsubmit=ev=>{
+    const v=ev.submitter?.value??'ok';
+    if(v==='ok'){
+      if(!f.reportValidity()){ev.preventDefault();return}
+      const targetD=isSeat?d:f.date.value;
+      if(!isSeat && CLOSED_WEEKDAYS.includes(parse(targetD).getDay())){
+        const msg=f.querySelector('.message');
+        if(msg){msg.hidden=false;msg.textContent='水曜日は定休日です'}
+        ev.preventDefault();
+        return;
+      }
+      let nameVal=f.name.value.trim();
+      const walkIn=isSeat && isToday && !nameVal;   // 名前で判定しない（「来店客」と打った予約まで使用中にしない）
+      if(walkIn) nameVal='来店客';
+      if(!nameVal){
+        ev.preventDefault();
+        return;
+      }
+      const chosenKind=isSeat ? 'res' : (f.querySelector('input[name="wait"]')?.checked ? 'wait' : 'res');
+
+      // 卓の検証（F4, F15）
+      let parsedTables = [];
+      if(isSeat){
+        parsedTables = [seatNo];
+      } else {
+        const tblInput = normalizeDigits(f.tables ? f.tables.value : '');
+        if(tblInput){
+          parsedTables = tblInput.split(/[、,・\s]+/).filter(Boolean);
+          const allNosTarget = ROWS.flatMap(r=>r.nos).concat(extraOf(targetD));
+          const missingNo = parsedTables.find(no => !allNosTarget.includes(no));
+          if(missingNo){
+            ev.preventDefault();
+            const msg=f.querySelector('.message');
+            if(msg){msg.hidden=false;msg.textContent=`卓${missingNo}はその日にありません`;}
+            return;
+          }
+          if(!validTables(parsedTables, targetD)){
+            ev.preventDefault();
+            const msg=f.querySelector('.message');
+            if(msg){msg.hidden=false;msg.textContent='卓は同じ種類の中から指定してください。';}
+            return;
+          }
+        }
+      }
+
+      // 全検査が通ってから代入（F5）
+      const o=e||{id:uid(),date:targetD,kind:chosenKind,tables:[],arrived:false,gone:false,called:false,cancelled:false};
+      if(chosenKind==='wait' && (!e || e.kind!=='wait')){
+        o.called=false;
+      }
+      o.kind=chosenKind;
+      o.date=targetD;
+      o.name=nameVal;
+      o.tel=f.tel.value.trim();
+      o.time=timePick.getValue();
+      o.people=peoplePick.getValue();
+      o.note=f.note.value.trim();
+
+      if(isSeat){
+        if(!e) db.entries.push(o);
+        assignTables(o,[seatNo],targetD);
+        if(walkIn){
+          o.arrived=true;
+          setOcc(seatNo,true);
+        }
+      } else {
+        if(parsedTables.length>0){
+          assignTables(o, parsedTables, targetD);
+        } else {
+          if(e) unassign(e);
+          else o.tables = [];
+        }
+        if(!e) db.entries.push(o);
+      }
+    } else return; // cancel
+    save();draw();
+  };
+}
+
+function openEdit(e,no){
+  const f=document.getElementById('editFrm'), dlg=document.getElementById('editDlg');
+  f.innerHTML=`<h3></h3>
+   <label>名前</label><input name="name" required autocomplete="off" autocorrect="off" spellcheck="false">
+   <label>人数</label><div id="editPeoplePicker"></div><input type="hidden" name="people" autocomplete="off">
+   <label>時間</label><div id="editTimePicker"></div><input type="hidden" name="time" autocomplete="off">
+   <label>電話番号</label><input name="tel" type="tel" inputmode="tel" autocomplete="off">
+   <label>要望</label><textarea name="note" rows="2" autocomplete="off" autocorrect="off" spellcheck="false"></textarea>
+   <label>卓の変更・複数卓</label><input name="tables" autocomplete="off" placeholder="例: 1, 2, 3">
+   <p class="message" hidden></p>
+   <div class="wide">
+     <button value="save" type="submit" class="on">保存</button>
+     <button value="release" type="submit">割り当て解除</button>
+     <button value="cancel" type="submit">取消</button>
+     <button value="close" type="submit">閉じる</button>
+   </div>`;
+  f.querySelector('h3').textContent=`${e.name}（卓 ${no}）`;
+
+  const peoplePick = createPeoplePicker(e?.people, f.people);
+  f.querySelector('#editPeoplePicker').appendChild(peoplePick.el);
+  const timePick = createTimePicker(e?.time, f.time);
+  f.querySelector('#editTimePicker').appendChild(timePick.el);
+
+  for(const k of['name','tel','note']) f[k].value=e[k]??'';
+  f.tables.value=e.tables.join(', ');
+  f.onkeydown=ev=>{if(ev.key==='Enter'&&ev.isComposing) ev.preventDefault()};
+  const message=f.querySelector('.message');
+  f.onsubmit=ev=>{
+    const action=ev.submitter?.value??'save';
+    if(action==='close') return;
+    if(action==='save'){
+      if(!f.reportValidity()){ev.preventDefault();return}
+      const rawTbl=normalizeDigits(f.tables ? f.tables.value : '');
+      const tables=rawTbl?rawTbl.split(/[、,・\s]+/).filter(Boolean):[];
+      if(tables.length===0){
+        unassign(e);
+      } else {
+        if(!assignTables(e,tables,e.date)){
+          ev.preventDefault();message.hidden=false;message.textContent='卓は同じ種類の中から指定してください。';return;
+        }
+      }
+      for(const k of['name','tel','note']) e[k]=f[k].value.trim();
+      e.people=peoplePick.getValue();
+      e.time=timePick.getValue();
+    } else if(action==='release') unassign(e);
+    else if(action==='cancel'){cancelEntry(e);return}
+    save();draw();
+  };
+  dlg.showModal();
+}
+
+/* ---------- ヘッダー ---------- */
+const $=id=>document.getElementById(id.startsWith('#')?id.slice(1):id);
+$('wPrev').onclick=()=>{weekStart=addDays(weekStart,-7);date=getOpenDate(weekStart);draw()};
+$('wNext').onclick=()=>{weekStart=addDays(weekStart,7);date=getOpenDate(weekStart);draw()};
+$('undoBtn').onclick=undo;
+$('wToday').onclick=()=>{date=getOpenDate(today());weekStart=mondayOf(date);draw()};
+$('fsUp').onclick=()=>{db.fs=Math.min(24,db.fs+1);try{lastSaved=JSON.stringify(db);localStorage.setItem(KEY,lastSaved)}catch(_e){}draw()};
+$('fsDown').onclick=()=>{db.fs=Math.max(16,db.fs-1);try{lastSaved=JSON.stringify(db);localStorage.setItem(KEY,lastSaved)}catch(_e){}draw()};
+$('grip').onclick=()=>{db.leftOff=!db.leftOff;try{lastSaved=JSON.stringify(db);localStorage.setItem(KEY,lastSaved)}catch(_e){}draw()};
+$('addRes').onclick=()=>openForm('res',null);
+$('cxToggle').onclick=()=>{const l=$('cxList');l.hidden=!l.hidden;$('cxToggle').textContent=l.hidden?'表示':'隠す'};
+$('exAdd').onclick=()=>{
+  const no=normalizeDigits($('exNo').value); if(!no) return;
+  if(!addExtra(date,no)){alert('卓番 '+no+' は既にあります');return}
+  $('exNo').value='';save();draw();
+};
+const bkpDlg=$('backupDlg');
+$('bkpOpen').onclick=()=>{
+  const stale=exportStaleDays();
+  $('bkpLastExport').textContent = db.lastExport
+    ? `最後にファイルへ保存した日: ${db.lastExport}（${stale}日前）`
+    : 'まだ一度もファイルに保存していません。iPadが壊れると予約は戻せません。';
+  $('bkpLastExport').classList.toggle('warn',stale>=EXPORT_REMIND_DAYS);
+  $('bkpOrigin').textContent='このデータの保存先: '+location.origin+'（別のアドレスで開くと別のデータになります）';
+  bkpDlg.showModal();renderSnapshots();
+};
+$('bkpExport').onclick=()=>{
+  saveTextToFiles(exportText(),'ippei-backup-'+ymd(new Date())+'.json').then(done=>{
+    if(!done) return;
+    db.lastExport=ymd(new Date());save();draw();
+    bkpDlg.close();
+  });
+};
+$('snapshotSave').onclick=()=>saveSnapshot();
+
+/* ---------- キーボードとダイアログ ---------- */
+const KEYBOARD_MIN=120;
+function fitDialogsToKeyboard(hidden,visibleH,offsetTop){
+  const up=hidden>KEYBOARD_MIN;
+  document.querySelectorAll('dialog[open]').forEach(d=>{
+    const s=d.style;
+    if(up){
+      s.position='fixed';s.left='0';s.right='0';s.bottom='auto';
+      s.top=(offsetTop+6)+'px';
+      s.marginTop='0';s.marginBottom='0';s.marginLeft='auto';s.marginRight='auto';
+      s.maxHeight=(visibleH-12)+'px';
+    }else{
+      s.position='';s.left='';s.right='';s.top='';s.bottom='';
+      s.marginTop='';s.marginBottom='';s.marginLeft='';s.marginRight='';s.maxHeight='';
+    }
+  });
+  return up;
+}
+function syncDialogsToViewport(){
+  const vv=window.visualViewport;
+  if(!vv) return false;
+  return fitDialogsToKeyboard(window.innerHeight-vv.height,vv.height,vv.offsetTop);
+}
+if(window.visualViewport){
+  window.visualViewport.addEventListener('resize',syncDialogsToViewport);
+  window.visualViewport.addEventListener('scroll',syncDialogsToViewport);
+}
+document.addEventListener('focusin',ev=>{
+  if(!ev.target.closest?.('dialog')) return;
+  setTimeout(()=>{syncDialogsToViewport();ev.target.scrollIntoView({block:'center',behavior:'smooth'})},120);
+});
+$('bkpFile').onchange=()=>{
+  const file=$('bkpFile').files[0]; if(!file) return;
+  const reader=new FileReader();
+  reader.onload=()=>{
+    $('bkpFile').value='';
+    const text=String(reader.result);
+    confirmThen('今のデータをファイルの内容で置き換えます。よろしいですか？',async ()=>{
+      try{
+        await saveSnapshot('manual');
+        if(importText(text)){save();draw();bkpDlg.close()}
+        else alert('このファイルはバックアップとして読み込めませんでした。');
+      }catch(_e){
+        alert('現在の状態を控えに保存できなかったため、置き換えを中止しました。');
+      }
+    },'置き換える');
+  };
+  reader.readAsText(file);
+};
+
+/* ---- 動作確認用: 空の保存領域で ?demo=1 のときだけ投入 ---- */
+function seedDemo(){
+  const hasData=db.entries.length||db.extra.length||Object.values(db.occ).some(seats=>seats.length);
+  if(!new URLSearchParams(location.search).has('demo') || hasData) return;
+  const later=addDays(weekStart,2), tomorrow=addDays(today(),1);
+  db.entries.push(
+    {id:'demo-a',date:today(),kind:'res',name:'田中様',tel:'090-0000-0001',time:'18:30',people:4,note:'座敷希望',tables:[],arrived:false,gone:false,called:false,cancelled:false},
+    {id:'demo-b',date:today(),kind:'res',name:'佐藤様',tel:'',time:'20:00',people:2,note:'',tables:['8'],arrived:false,gone:false,called:false,cancelled:false},
+    {id:'demo-c',date:today(),kind:'wait',name:'鈴木様',tel:'090-0000-0002',time:'',people:2,note:'空き次第',tables:[],arrived:false,gone:false,called:true,cancelled:false},
+    {id:'demo-d',date:today(),kind:'res',name:'山本様',tel:'',time:'19:00',people:3,note:'カウンター希望',tables:['1','2','3'],arrived:true,gone:false,called:false,cancelled:false},
+    {id:'demo-g',date:today(),kind:'res',name:'渡辺様',tel:'',time:'21:00',people:3,note:'',tables:['8'],arrived:false,gone:false,called:false,cancelled:false},
+    {id:'demo-e',date:later,kind:'res',name:'高橋様',tel:'',time:'19:00',people:6,note:'',tables:['17'],arrived:false,gone:false,called:false,cancelled:false},
+    {id:'demo-f',date:tomorrow,kind:'res',name:'伊藤様',tel:'',time:'',people:null,note:'',tables:[],arrived:false,gone:false,called:false,cancelled:false},
+  );
+  db.occ[today()]=['1','2','3'];save();
+}
+seedDemo();
+draw();
+if(loadFailed&&!location.search.includes('test=1')){
+  alert('保存されていた予約を読み取れませんでした。\n読めなかった内容は端末内に退避してあります。\n\n画面右下の「バックアップ」を開き、「アプリの中の控え」から戻してください。');
+}
+if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});
+if(!location.search.includes('test=1')){
+  createDailySnapshot();
+  navigator.storage?.persist?.().catch(()=>{});
+}
+
+/* ---- 自己チェック: ?test=1 で開くと27章の完了条件を含む主要ロジックを検証してconsoleに出す ---- */
+if(location.search.includes('test=1')) (async()=>{
+  const bk=JSON.stringify(db), oldDate=date, oldWeekStart=weekStart;
+  const _origAlert=window.alert; window.alert=()=>{};
+  let checks=0;
+  const check=(ok,label)=>{console.assert(ok,label);if(!ok)throw new Error(`自己チェック失敗: ${label}`);checks++};
+  try{
+    const entry=(id,name,tables=[])=>({id,date:today(),kind:'res',name,tables,people:null,time:'',tel:'',note:'',arrived:false,gone:false,called:false,cancelled:false});
+    db={entries:[],extra:[],occ:{},fs:17}; date=today();
+
+  /* === 27章 完了条件1: 削った要素がDOMに無い === */
+  check(!$('#tabBook')&&!$('#searchBtn')&&!$('#archiveOpen')&&!$('#bkpClear')&&!$('#storageSize')&&!$('#seatPick'),
+    '完了条件1: 削った要素(#tabBook, #searchBtn, #archiveOpen, #bkpClear, #storageSize, #seatPick)がDOMに存在しない');
+
+  /* === 基本ドラッグ動作 === */
+  const dragEntry=entry('drag1','ドラッグ検査'); dragEntry.time='20:00';dragEntry.people=2;dragEntry.note='カウンター希望';db.entries.push(dragEntry); draw();
+  dragFromTo(document.querySelector('.drag-handle[data-entry-id="drag1"]'),document.querySelector('.seat[data-no="11"]'));
+  check(dragEntry.tables.join()==='11','ドラッグ1回は1卓だけに割り当てる');
+  check(assignTables(dragEntry,['10'])&&dragEntry.tables.join()==='10','新たな1卓割り当ては既存卓を置き換える');
+  draw();
+  const chip10=document.querySelector('.chip[data-entry-id="drag1"][data-from="10"]');
+  dragFromTo(chip10,document.querySelector('.seat[data-no="9"]'));
+  check(dragEntry.tables.join()==='9','配席済みチップ本体のドラッグは席を移動する');
+  
+  /* === 27章 完了条件5: チップをクリックすると #actDlg が開く (#dlg ではない) === */
+  const chip=document.querySelector('.chip[data-entry-id="drag1"][data-from="9"]');
+  chip.click();
+  check($('actDlg').open && !$('dlg').open, '完了条件5: 予約のあるマスのチップをクリックすると#actDlgが開き#dlgは開かない');
+  $('actDlg').close();
+
+  check(chip.textContent.includes('20:00')&&chip.textContent.includes('2名')&&chip.querySelector('.chip-note')?.textContent==='カウンター希望','チップは時間・人数と要望の1行目を表示する');
+  check(chip.querySelector('.chip-name')?.textContent==='ドラッグ検査'&&chip.querySelector('.chip-people')?.textContent==='2名'&&chip.querySelector('.chip-time')?.textContent==='20:00'&&[...chip.querySelectorAll('.chip-name,.chip-people,.chip-time')].map(el=>el.className).join()==='chip-name,chip-people,chip-time','チップの名前・人数・時間は3つの別々の要素で順に表示する');
+
+  /* === 27章 完了条件8: 保留カードを卓へドラッグ→割り当て。チップを保留一覧へドラッグ→解除 === */
+  dragFromTo(document.querySelector('.chip[data-entry-id="drag1"]'),document.getElementById('resList'));
+  check(dragEntry.tables.length===0&&listEntries(today(),'res').includes(dragEntry),'完了条件8(後半): チップを保留一覧へドラッグすると割り当て解除されて一覧に戻る');
+  dragFromTo(document.querySelector('.drag-handle[data-entry-id="drag1"]'),document.querySelector('.seat[data-no="10"]'));
+  check(dragEntry.tables.join()==='10','完了条件8(前半): 保留一覧のカードを卓へドラッグすると割り当てられる');
+  unassign(dragEntry);
+
+  const waitDrag=entry('wait-drag','電話待ち',['11']);waitDrag.kind='wait';db.entries.push(waitDrag);draw();
+  dragFromTo(document.querySelector('.chip[data-entry-id="wait-drag"]'),document.getElementById('resList'));
+  check(waitDrag.kind==='wait'&&waitDrag.tables.length===0&&listEntries(today(),'wait').includes(waitDrag),'電話待ちを保留一覧へ落とすと未割り当てに戻る');
+  const arrivedDrag=entry('arrived-drag','来店済み',['12']);arrivedDrag.arrived=true;db.entries.push(arrivedDrag);setOcc('12',true);draw();
+  dragFromTo(document.querySelector('.chip[data-entry-id="arrived-drag"]'),document.getElementById('resList'));
+  check(arrivedDrag.tables.length===0&&!arrivedDrag.arrived&&!occOf(today()).includes('12'),'来店済みチップを保留一覧へ戻すと卓の使用中も解除する');
+
+  const unknownPeople=entry('unknown-people','人数未定検査',['13']);db.entries.push(unknownPeople);draw();
+  check(document.querySelector('.chip[data-entry-id="unknown-people"] .chip-people')?.textContent==='人数未定','人数未定の予約は人数未定と表示する');
+  const unknownTime=entry('unknown-time','時間未定検査',['7']);unknownTime.people=3;db.entries.push(unknownTime);draw();
+  check(!document.querySelector('.chip[data-entry-id="unknown-time"] .chip-time'),'時間未定の予約は時間の空行を残さない');
+  const zashiki=document.querySelector('.zashiki-column');
+  check(zashiki&&[...zashiki.querySelectorAll('.seat')].map(s=>s.dataset.no).join()==='17,18,19,20','座敷17〜20は専用の縦列に順番どおり表示する');
+  
+  const unassigned=entry('u1','未割当'), assigned=entry('a1','配席済み',['8']); db.entries.push(unassigned,assigned);
+  check(listEntries(today(),'res').includes(unassigned)&&!listEntries(today(),'res').includes(assigned),'未割り当てだけが保留一覧に出る');
+  unassign(assigned); check(listEntries(today(),'res').includes(assigned),'割り当て解除で保留一覧に戻る');
+  check(assignTables(unassigned,['1','2','3']),'同種連番の複数卓指定を受け入れる');
+  check(!assignTables(unassigned,['7','8']),'種類をまたぐ複数卓指定を拒否する');
+  check(assignTables(unassigned,['1','3']),'飛び番でも同じ種類なら複数卓指定を受け入れる');unassign(unassigned);
+
+  const first=entry('same1','先',['10']), second=entry('same2','後',['10']); db.entries.push(first,second);
+  moveTable(second,'10','9'); check(first.tables.join()==='10'&&second.tables.join()==='9','同卓2件では操作対象のチップの予約だけを操作する');
+  
+  const active=entry('active','来店',['12']); db.entries.push(active); arrive(active);
+  check(active.arrived&&occOf(today()).includes('12'),'arrive()で対象卓を使用中にする');
+  leave(active); check(active.gone&&!occOf(today()).includes('12')&&db.entries.includes(active),'leave()で空席へ戻し記録を残す');
+  check(occOf(addDays(today(),1)).length===0,'翌日は全席空席で始まる');
+  addExtra(today(),'21');setOcc('21',true);setOcc('21',false);
+  check(extraOf(today()).includes('21'),'追加席は空席に戻っても自動で消えない（F2）');
+  delExtra('21');
+  check(!extraOf(today()).includes('21'),'追加席はdelExtraで削除される（F2）');
+  addExtra(today(),'22');const next=entry('next','次組',['22']);db.entries.push(next);setOcc('22',true);setOcc('22',false);
+  check(extraOf(today()).includes('22'),'割り当てが残る追加席は消えない');
+
+  /* === 27章 完了条件7: 空席のマスをクリックしても occ は変わらない === */
+  date=today();draw();
+  check(!occOf(today()).includes('2'),'卓2は初期状態で空席');
+  document.querySelector('.seat[data-no="2"]').click();
+  check(!occOf(today()).includes('2'),'完了条件7: 空席マスをクリックしてもoccは変わらない（使用中にならない）');
+  check($('dlg').open,'空席マスをクリックすると予約フォーム#dlgが開いている');
+  $('dlg').close();
+
+  /* === 27章 完了条件2: 空席マスをクリック→#dlg、seatPickと日付欄なし、名前を入れて保存→予約できる === */
+  document.querySelector('.seat[data-no="2"]').click();
+  check($('dlg').open,'空席マスをクリックで#dlgが開く');
+  check(!$('#seatPick')&&!$('frm').querySelector('input[name="date"]'),'完了条件2: seatPickと日付欄が無い');
+  $('frm').name.value='空席予約テスト';
+  $('frm').querySelector('button[value="ok"]').click();
+  check(db.entries.some(e=>e.name==='空席予約テスト'&&e.tables.join()==='2'&&e.date===today()),'完了条件2: 名前を入れて保存するとその卓・その日付の予約ができる');
+
+  /* === 27章 完了条件3: 今日のマスで名前空欄のまま保存 → 名前「来店客」・arrived=true・その卓が使用中(.seat.used) === */
+  date=today();draw();
+  check(!occOf(today()).includes('3'),'卓3は初期状態で空席');
+  document.querySelector('.seat[data-no="3"]').click();
+  check($('dlg').open,'卓3をクリックで#dlgが開く');
+  $('frm').name.value=''; // 空欄
+  $('frm').querySelector('button[value="ok"]').click();
+  const guest=db.entries.find(e=>e.date===today()&&e.tables.includes('3')&&e.name==='来店客');
+  check(guest&&guest.arrived&&occOf(today()).includes('3'),'完了条件3: 今日のマスで名前空欄で保存→名前「来店客」かつarrived=trueかつoccに追加');
+  check(document.querySelector('.seat[data-no="3"]').classList.contains('used'),'完了条件3: その卓が.seat.usedになる');
+
+  /* === 27章 完了条件4: 今日以外の日付では名前空欄で保存できない（予約が増えない） === */
+  const otherDate=getOpenDate(addDays(today(),1));
+  date=otherDate;draw();
+  const countBeforeOther=db.entries.length;
+  document.querySelector('.seat[data-no="1"]').click();
+  check($('dlg').open,'今日以外のマスをクリックで#dlgが開く');
+  $('frm').name.value='';
+  $('frm').querySelector('button[value="ok"]').click();
+  check(db.entries.length===countBeforeOther,'完了条件4: 今日以外の日付では名前空欄で保存できず予約が増えない');
+  $('dlg').close();
+  date=today();draw();
+
+  /* === 27章 完了条件6: 「使用中にする」→arrived=true、全卓が.seat.used。「食事終了」→gone=true、マスから消えoccから外れる === */
+  const actRes=entry('act-res','状態テスト',['4','5']);db.entries.push(actRes);draw();
+  const actChip=document.querySelector('.chip[data-entry-id="act-res"]');
+  actChip.click();
+  check($('actDlg').open,'チップクリックで#actDlgが開く');
+  const btnArrive=[...$('#actBtns').querySelectorAll('button')].find(b=>b.textContent==='全2卓を使用中にする'||b.textContent==='使用中にする');
+  check(!!btnArrive,'今日かつ!arrivedのとき「使用中にする」ボタンが表示される');
+  btnArrive.click();
+  check(actRes.arrived&&occOf(today()).includes('4')&&occOf(today()).includes('5'),'完了条件6: 使用中にするでarrived=trueかつ全卓がoccに入る');
+  check(document.querySelector('.seat[data-no="4"]').classList.contains('used')&&document.querySelector('.seat[data-no="5"]').classList.contains('used'),'完了条件6: 全卓が.seat.usedになる');
+  // 再度チップをクリックして食事終了
+  const actChip2=document.querySelector('.chip[data-entry-id="act-res"]');
+  actChip2.click();
+  const btnLeave=[...$('#actBtns').querySelectorAll('button')].find(b=>b.textContent==='全2卓を食事終了'||b.textContent==='食事終了');
+  check(!!btnLeave,'今日かつarrivedのとき「食事終了」ボタンが表示される');
+  btnLeave.click();
+  check(actRes.gone&&!occOf(today()).includes('4')&&!occOf(today()).includes('5'),'完了条件6: 食事終了でgone=trueかつoccから外れる');
+  check(!document.querySelector('.chip[data-entry-id="act-res"]'),'完了条件6: マスから消える');
+
+  /* === 27章 完了条件10: 「使用中にする」→「元に戻す」で元に戻る === */
+  const undoArrive=entry('undo-arrive','取消来店',['6']);db.entries.push(undoArrive);save();draw();
+  document.querySelector('.chip[data-entry-id="undo-arrive"]').click();
+  [...$('#actBtns').querySelectorAll('button')].find(b=>b.textContent==='使用中にする').click();
+  check(byId('undo-arrive').arrived&&occOf(today()).includes('6'),'使用中になった');
+  $('undoBtn').click();
+  check(!byId('undo-arrive').arrived&&!occOf(today()).includes('6'),'完了条件10: 使用中にする→元に戻すで使用前に戻る');
+
+  /* === 27章 完了条件9: 日付タブへドラッグしても日付は変わらない === */
+  const dateDragTarget=addDays(weekStart,1);
+  const dragTargetDate=date;
+  const noDateDrag=entry('no-date-drag','日付ドラッグ不可');db.entries.push(noDateDrag);draw();
+  dragFromTo(document.querySelector('.drag-handle[data-entry-id="no-date-drag"]'),document.querySelector('#dates button'));
+  check(noDateDrag.date===dragTargetDate,'完了条件9: 日付タブへドラッグしても日付は変わらない');
+
+  /* === 27章 完了条件12: 使用中の青と文字の対比が4.5以上 === */
+  const relLuminance=(r,g,b)=>[r,g,b].map(v=>{v/=255;return v<=0.03928?v/12.92:Math.pow((v+0.055)/1.055,2.4)}).reduce((acc,cur,i)=>[0.2126,0.7152,0.0722][i]*cur+acc,0);
+  const parseHex=hex=>{const h=hex.replace('#','');return[parseInt(h.slice(0,2),16),parseInt(h.slice(2,4),16),parseInt(h.slice(4,6),16)]};
+  const cs=getComputedStyle(document.documentElement);
+  const aoHex=cs.getPropertyValue('--ao').trim()||'#185094';
+  const kinariHex=cs.getPropertyValue('--kinari').trim()||'#EFE6D6';
+  const lAo=relLuminance(...parseHex(aoHex)), lKinari=relLuminance(...parseHex(kinariHex));
+  const contrast=(Math.max(lAo,lKinari)+0.05)/(Math.min(lAo,lKinari)+0.05);
+  check(contrast>=4.5,`完了条件12: 使用中の青(${aoHex})と文字(${kinariHex})の対比が4.5以上 (実測: ${contrast.toFixed(2)})`);
+
+  /* === 27章 完了条件13: 日付タブが6つで水曜日が無い。今日が水曜の場合に開く日付を決める関数が木曜を返す === */
+  const dateBtns=[...document.querySelectorAll('#dates button[data-date]')];
+  check(dateBtns.length===6,'完了条件13: 日付タブが6つ');
+  const btnDays=dateBtns.map(b=>parse(b.dataset.date).getDay());
+  check(!btnDays.includes(3),'完了条件13: 日付タブに水曜日(3)が無い');
+  check(getOpenDate('2026-09-16')==='2026-09-17','完了条件13: 水曜(2026-09-16)を渡すと木曜(2026-09-17)を返す純粋関数');
+  check(getOpenDate('2026-09-17')==='2026-09-17','完了条件13: 木曜ならそのまま木曜を返す');
+
+  /* === 27章 完了条件14: 保留カードの編集で水曜日に変えて保存しても date が変わらない === */
+  const editWed=entry('edit-wed','水曜編集');editWed.date='2026-09-17';db.entries.push(editWed);date='2026-09-17';draw();
+  openForm('res',editWed);
+  $('frm').date.value='2026-09-16'; // 水曜日
+  $('frm').querySelector('button[value="ok"]').click();
+  check(editWed.date==='2026-09-17','完了条件14: 保留カードの編集で水曜日に変えて保存してもdateが変わらない');
+  $('dlg').close();
+  date=today();draw();
+
+  /* === 27章 完了条件15: 「終了・取消」一覧に食事終了と取消の両方が出る（別の日の一覧には出ない） === */
+  date=today();
+  db.entries=db.entries.filter(e=>!e.gone&&!e.cancelled);
+  const vanishGone=entry('v-gone','終了客',['15']);vanishGone.gone=true;vanishGone.arrived=false;
+  const vanishCx=entry('v-cx','取消客',['16']);vanishCx.cancelled=true;
+  const vanishOther=entry('v-other','別日取消',['15']);vanishOther.date=otherDate;vanishOther.cancelled=true;
+  db.entries.push(vanishGone,vanishCx,vanishOther);draw();
+
+  const cxHeadText=$('cxHead').textContent;
+  check(cxHeadText.includes('終了・取消')&&cxHeadText.includes('2'),'完了条件15: 終了・取消の見出しに件数(2件)が出る');
+
+  if($('cxList').hidden) $('cxToggle').click();
+  check(!$('cxList').hidden,'終了・取消一覧が表示される');
+
+  const cxItems=[...$('cxList').querySelectorAll('.item')];
+  const itemNames=cxItems.map(it=>it.querySelector('.nm')?.textContent);
+  check(itemNames.includes('終了客')&&itemNames.includes('取消客'),'完了条件15: 食事終了した予約と取消した予約が両方出る');
+  check(!itemNames.includes('別日取消'),'完了条件15: 別の日の一覧には出ない');
+  check(itemNames[0]==='取消客'&&itemNames[1]==='終了客','完了条件15: 新しく消えたものが上（配列の後ろほど上）');
+
+  const goneItem=cxItems.find(it=>it.querySelector('.nm')?.textContent==='終了客');
+  check(goneItem.querySelector('.mt')?.textContent.includes('終了')&&goneItem.querySelector('.tbl')?.textContent.includes('15'),'完了条件15: 終了客の行に状態「終了」と卓番が含まれる');
+  const cxItem=cxItems.find(it=>it.querySelector('.nm')?.textContent==='取消客');
+  check(cxItem.querySelector('.mt')?.textContent.includes('取消')&&cxItem.querySelector('.tbl')?.textContent.includes('16'),'完了条件15: 取消客の行に状態「取消」と卓番が含まれる');
+
+  /* === 27章 完了条件16: 「終了・取消」の「戻す」で、終了した予約がマスに予約として戻る === */
+  const restoreBtn=goneItem.querySelector('button');
+  check(restoreBtn&&(restoreBtn.textContent==='使用中に戻す'||restoreBtn.textContent==='予約に戻す'),'戻すボタンが存在する');
+  restoreBtn.click();
+  check(!vanishGone.gone&&vanishGone.arrived,'完了条件16: 終了予約を戻すとgone=falseかつarrived=trueになる');
+  check(document.querySelector('.seat[data-no="15"] .chip[data-entry-id="v-gone"]'),'完了条件16: マスに予約として戻る');
+
+  /* === 27章 完了条件17: #waitList と #addWait がDOMに無い。未割り当ての電話待ちが #resList に .item.wait として出て、札「電話待ち」がある === */
+  check(!$('#waitList')&&!$('#addWait'),'完了条件17: #waitList と #addWait がDOMに存在しない');
+  const waitItemTest=entry('wait-item-17','待ちテスト17');waitItemTest.kind='wait';waitItemTest.tel='090-1111-2222';
+  db.entries.push(waitItemTest);draw();
+  const waitCard=document.querySelector('#resList .item[data-entry-id="wait-item-17"]');
+  check(waitCard&&waitCard.classList.contains('wait'),'完了条件17: 未割り当ての電話待ちが#resListに.item.waitとして出る');
+  const badgeEl=waitCard?.querySelector('.badge');
+  check(badgeEl&&badgeEl.textContent==='電話待ち','完了条件17: 札「電話待ち」がある');
+
+  /* === 27章 完了条件18: 電話番号ありの保留カードで「電話待ちにする」ボタン → kind==='wait'、「待ち解除」 → kind==='res' === */
+  const toggleEntry=entry('toggle-18','切替テスト18');toggleEntry.tel='090-3333-4444';
+  db.entries.push(toggleEntry);draw();
+  const resCard=document.querySelector('#resList .item[data-entry-id="toggle-18"]');
+  const btnWait=[...resCard.querySelectorAll('.acts button')].find(b=>b.textContent==='電話待ちにする');
+  check(!!btnWait,'保留カードに「電話待ちにする」ボタンがある');
+  btnWait.click();
+  check(toggleEntry.kind==='wait','完了条件18: 電話番号ありの保留カードで電話待ちボタンを押すとkind===waitになる');
+  const waitCard18=document.querySelector('#resList .item[data-entry-id="toggle-18"]');
+  const btnCancelWait=[...waitCard18.querySelectorAll('.acts button')].find(b=>b.textContent==='待ち解除');
+  check(!!btnCancelWait,'電話待ちカードに「待ち解除」ボタンがある');
+  btnCancelWait.click();
+  check(toggleEntry.kind==='res','完了条件18: 待ち解除ボタンを押すとkind===resになる');
+
+  /* === 27章 完了条件19: 電話番号なしの保留カードで「電話待ちにする」ボタン → kind は変わらず #dlg が開き、電話待ちのチェックが入っている === */
+  const noTelEntry=entry('notel-19','電話なし19');noTelEntry.tel='';
+  db.entries.push(noTelEntry);draw();
+  const noTelCard=document.querySelector('#resList .item[data-entry-id="notel-19"]');
+  const btnWaitNoTel=[...noTelCard.querySelectorAll('.acts button')].find(b=>b.textContent==='電話待ちにする');
+  btnWaitNoTel.click();
+  check(noTelEntry.kind==='res','完了条件19: 電話番号なしで電話待ちボタンを押してもkindは変わらない');
+  check($('dlg').open,'完了条件19: #dlgが開く');
+  const waitCheck=$('frm').querySelector('input[name="wait"]');
+  check(waitCheck&&waitCheck.checked,'完了条件19: 電話待ちのチェックが入っている');
+  $('dlg').close();
+
+  /* === 27章 完了条件20: ＋ 予約 の画面で電話待ちにチェックし電話番号空欄では保存されない。電話番号を入れると kind==='wait' で保存される === */
+  $('addRes').click();
+  check($('dlg').open,'＋ 予約で#dlgが開く');
+  const newWaitCheck=$('frm').querySelector('input[name="wait"]');
+  check(newWaitCheck&&!newWaitCheck.checked,'＋ 予約の初期状態では電話待ちチェックは外れている');
+  newWaitCheck.checked=true;
+  newWaitCheck.dispatchEvent(new Event('change'));
+  check($('frm').tel.required,'電話待ちにチェックすると電話番号がrequiredになる');
+  $('frm').name.value='新規電話待ち';
+  $('frm').tel.value='';
+  $('frm').querySelector('button[value="ok"]').click();
+  check(!db.entries.some(e=>e.name==='新規電話待ち'),'完了条件20: 電話待ちにチェックし電話番号空欄では保存されない');
+  $('frm').tel.value='090-5555-6666';
+  $('frm').querySelector('button[value="ok"]').click();
+  const createdWait=db.entries.find(e=>e.name==='新規電話待ち');
+  check(createdWait&&createdWait.kind==='wait','完了条件20: 電話番号を入れるとkind===waitで保存される');
+
+  /* === 27章 完了条件21: 電話待ちを卓へドラッグ → 割り当てられ、チップの左線が洋がらし。チップを保留へドラッグで戻すと kind==='wait' のまま保留に出る === */
+  const waitDrag21=entry('wait-drag-21','ドラッグ待ち21');waitDrag21.kind='wait';waitDrag21.tel='090-7777-8888';
+  db.entries.push(waitDrag21);draw();
+  dragFromTo(document.querySelector('.drag-handle[data-entry-id="wait-drag-21"]'),document.querySelector('.seat[data-no="16"]'));
+  check(waitDrag21.tables.join()==='16','電話待ちが卓16に割り当てられる');
+  const waitChip=document.querySelector('.seat[data-no="16"] .chip[data-entry-id="wait-drag-21"]');
+  check(waitChip&&waitChip.style.borderLeftColor==='var(--karashi)','完了条件21: チップの左線が洋がらし(var(--karashi))');
+  dragFromTo(waitChip,document.getElementById('resList'));
+  check(waitDrag21.tables.length===0&&waitDrag21.kind==='wait','完了条件21: 保留へドラッグで戻すとkind===waitのまま');
+  check(document.querySelector('#resList .item[data-entry-id="wait-drag-21"]')?.classList.contains('wait'),'完了条件21: kind===waitのまま保留に出る');
+
+  /* === 27章 完了条件22: 今日、来店済みAと来店前Bが同じ卓にあると、マスが has-next、Bのチップが next で 次 の札を持ち、Aのチップは next でない。チップはAが上 === */
+  const _condBk = JSON.stringify(db), _condDate = date;
+  date=today();weekStart=mondayOf(today());
+  db.entries=db.entries.filter(e=>!e.tables.includes('8')&&!e.tables.includes('9'));
+  const testB=entry('cond22-b','予約B',['8']);testB.arrived=false;
+  const testA=entry('cond22-a','来店A',['8']);testA.arrived=true;
+  db.entries.push(testB,testA);setOcc('8',true);draw();
+
+  const seat8=document.querySelector('.seat[data-no="8"]');
+  check(seat8&&seat8.classList.contains('has-next'),'完了条件22: マスが has-next');
+  check(seat8.querySelector('.no .badge.next')?.textContent==='次','完了条件22: 卓番の横に「次」の札がある');
+
+  const chips8=[...seat8.querySelectorAll('.chip[data-entry-id]')];
+  check(chips8.length===2,'完了条件22: 卓8に2件のチップが表示される');
+  check(chips8[0].dataset.entryId==='cond22-a','完了条件22: チップはAが上');
+  check(chips8[1].dataset.entryId==='cond22-b','完了条件22: チップはBが下');
+  check(!chips8[0].classList.contains('next'),'完了条件22: Aのチップは next でない');
+  check(chips8[1].classList.contains('next'),'完了条件22: Bのチップが next');
+  check(chips8[1].querySelector('.badge.next')?.textContent==='次','完了条件22: Bのチップが「次」の札を持つ');
+  check(!chips8[0].querySelector('.badge.next'),'完了条件22: Aのチップは「次」の札を持たない');
+
+  /* === 27章 完了条件23: 保留の予約を使用中の卓へドラッグすると、その予約のチップが next になる === */
+  const occSeat9=entry('cond23-a','使用中A9',['9']);occSeat9.arrived=true;
+  const pending9=entry('cond23-b','保留B9');pending9.tables=[];pending9.arrived=false;
+  db.entries.push(occSeat9,pending9);setOcc('9',true);draw();
+
+  const seat9=document.querySelector('.seat[data-no="9"]');
+  check(seat9.classList.contains('used')&&!seat9.classList.contains('has-next'),'ドラッグ前: 卓9は使用中でhas-nextは無い');
+  dragFromTo(document.querySelector('.drag-handle[data-entry-id="cond23-b"]'),seat9);
+  check(pending9.tables.join()==='9','保留B9が卓9に割り当てられた');
+  const chipB9=document.querySelector('.seat[data-no="9"] .chip[data-entry-id="cond23-b"]');
+  check(chipB9&&chipB9.classList.contains('next'),'完了条件23: 保留の予約を使用中の卓へドラッグするとその予約のチップが next になる');
+  check(document.querySelector('.seat[data-no="9"]').classList.contains('has-next'),'完了条件23: マスが has-next になる');
+
+  /* === 27章 完了条件24: Aを状態画面の 食事終了 で終えると、Bのチップから next が外れ、マスの has-next と used も外れる === */
+  const chipA9=document.querySelector('.seat[data-no="9"] .chip[data-entry-id="cond23-a"]');
+  chipA9.click();
+  check($('actDlg').open,'状態画面が開く');
+  const btnLeave24=[...$('#actBtns').querySelectorAll('button')].find(b=>b.textContent==='全1卓を食事終了'||b.textContent==='食事終了');
+  check(!!btnLeave24,'食事終了ボタンがある');
+  btnLeave24.click();
+  check(occSeat9.gone&&!occSeat9.arrived,'食事終了でAはgone=trueかつarrived=false');
+  const chipB9After=document.querySelector('.seat[data-no="9"] .chip[data-entry-id="cond23-b"]');
+  check(chipB9After&&!chipB9After.classList.contains('next'),'完了条件24: Bのチップから next が外れる');
+  check(!chipB9After.querySelector('.badge.next'),'完了条件24: Bのチップから「次」の札が外れる');
+  const seat9After=document.querySelector('.seat[data-no="9"]');
+  check(!seat9After.classList.contains('has-next')&&!seat9After.classList.contains('used'),'完了条件24: マスの has-next と used も外れる');
+
+  /* === 27章 完了条件25: 来店済みが無い卓に2件あっても next は付かない（今日以外の日付でも付かない） === */
+  db.entries=db.entries.filter(e=>!e.tables.includes('10'));
+  const noArr1=entry('cond25-1','未着1',['10']), noArr2=entry('cond25-2','未着2',['10']);
+  db.entries.push(noArr1,noArr2);draw();
+  const seat10=document.querySelector('.seat[data-no="10"]');
+  check(!seat10.classList.contains('has-next'),'完了条件25: 来店済みが無い卓に2件あってもマスに has-next は付かない');
+  const chips10=[...seat10.querySelectorAll('.chip[data-entry-id]')];
+  check(!chips10[0].classList.contains('next')&&!chips10[1].classList.contains('next'),'完了条件25: 来店済みが無い卓に2件あってもチップに next は付かない');
+
+  // 今日以外の日付での確認
+  const futureDate=getOpenDate(addDays(today(),1));
+  date=futureDate;draw();
+  const futureArr=entry('cond25-f1','将来来店',['10']);futureArr.date=futureDate;futureArr.arrived=true;
+  const futureNot=entry('cond25-f2','将来未着',['10']);futureNot.date=futureDate;futureNot.arrived=false;
+  db.entries.push(futureArr,futureNot);draw();
+  const seat10Future=document.querySelector('.seat[data-no="10"]');
+  check(!seat10Future.classList.contains('has-next'),'完了条件25: 今日以外の日付では has-next は付かない');
+  const chips10Future=[...seat10Future.querySelectorAll('.chip[data-entry-id]')];
+  check(chips10Future.every(c=>!c.classList.contains('next')),'完了条件25: 今日以外の日付では next は付かない');
+  db=JSON.parse(_condBk);date=_condDate;draw();
+
+  /* === 使用中にした予約を取消すと、青が外れる === */
+  date=today();weekStart=mondayOf(today());db.entries=db.entries.filter(e=>!e.tables.includes('14'));draw();
+  db.entries.push(entry('cx-used','取消使用中',['14']));save();draw();
+  document.querySelector('.seat[data-no="14"] .chip').click();
+  [...document.querySelectorAll('#actBtns button')].find(b=>b.textContent==='使用中にする').click();
+  check(document.querySelector('.seat[data-no="14"]').classList.contains('used'),'使用中にすると卓14が青い');
+  document.querySelector('.seat[data-no="14"] .chip').click();
+  [...document.querySelectorAll('#actBtns button')].find(b=>b.textContent==='予約を取り消す').click();
+  check(!document.querySelector('.seat[data-no="14"]').classList.contains('used')&&!occOf(today()).includes('14'),'使用中の予約を取消すと卓14の青が外れ、occからも外れる');
+  const cxUsed=db.entries.find(e=>e.id==='cx-used');
+  check(cxUsed.cancelled&&!cxUsed.arrived,'取消した予約はarrived=falseになる（戻すと予約として戻る）');
+  occOf(today()).push('13');draw();
+  check(!document.querySelector('.seat[data-no="13"]').classList.contains('used'),'予約の無い卓はoccに残っていても青くしない');
+  occOf(today()).splice(occOf(today()).indexOf('13'),1);
+
+  /* === 同卓2件・3件表示 === */
+  db.entries=db.entries.filter(e=>!e.tables.includes('7'));
+  const overlapA=entry('overlap-a','同卓先',['7']),overlapB=entry('overlap-b','同卓後',['7']);db.entries.push(overlapA,overlapB);draw();
+  check(document.querySelectorAll('.seat[data-no="7"] .chip[data-entry-id]').length===2,'同卓2件は両方のチップを表示し他N件に畳まない');
+  const overlapC=entry('overlap-c','同卓3件目',['7']);db.entries.push(overlapC);draw();
+  check(document.querySelectorAll('.seat[data-no="7"] .chip[data-entry-id]').length===2&&document.querySelector('.seat[data-no="7"] .chip:last-child')?.textContent==='他 1件','同卓3件目は他N件に畳む');
+
+  /* === バックアップ往復・検証 === */
+  const tapSnap=JSON.stringify(db);
+  const _origDb=db;
+  check(importText(exportText())&&JSON.stringify(db)===tapSnap,'バックアップの書き出し→読み戻し往復でデータが一致する');
+  db=_origDb;
+  check(!importText('{')&&JSON.stringify(db)===tapSnap,'壊れたJSONを拒否してデータを変えない');
+  check(!importText('{"v":9,"data":{}}')&&JSON.stringify(db)===tapSnap,'vが異なるバックアップを拒否してデータを変えない');
+  check(!importText(JSON.stringify({v:1,data:{entries:'x',extra:[],occ:{}}}))&&JSON.stringify(db)===tapSnap,'entriesが配列でないバックアップを拒否してデータを変えない');
+
+  /* === 控え pruneSnapshots === */
+  const snapshotSamples=[
+    {id:'snapshot-old',at:'2026-01-01T00:00:00.000Z'},
+    {id:'snapshot-middle',at:'2026-01-02T00:00:00.000Z'},
+    {id:'snapshot-new',at:'2026-01-03T00:00:00.000Z'},
+  ],prunedSnapshots=pruneSnapshots(snapshotSamples,2);
+  check(prunedSnapshots.remove.map(s=>s.id).join()==='snapshot-old'&&prunedSnapshots.keep.map(s=>s.id).join()==='snapshot-middle,snapshot-new'&&pruneSnapshots(snapshotSamples.slice(1),2).remove.length===0,'控えは上限超過分を古い順に落とし、上限以内なら落とさない');
+  const snapshotText=exportText();db={entries:[entry('snapshot-replaced','置換前')],extra:[],occ:{},fs:17};
+  check(importText(snapshotText)&&JSON.stringify(db)===tapSnap,'控えのtextを読み戻すとdbが置き換わる');
+  const brokenSnapshotDb=JSON.stringify(db);
+  check(!importText('{壊れた控え')&&JSON.stringify(db)===brokenSnapshotDb,'壊れたtextを持つ控えはdbを変えない');
+  const autoAt=new Date(`${today()}T12:00:00`).toISOString(),otherAt=new Date(`${addDays(today(),1)}T12:00:00`).toISOString();
+  check(hasAutoSnapshotOn([{at:autoAt,kind:'auto'}],today())&&!hasAutoSnapshotOn([{at:autoAt,kind:'manual'},{at:otherAt,kind:'auto'}],today()),'同じ日の自動控えだけを判定する');
+
+  /* === 元に戻す (undo) === */
+  const _origUndoStack=undoStack.slice();
+  const _origLastSaved=lastSaved;
+  undoStack=[];lastSaved=JSON.stringify(db);
+  const undoAssign=entry('undo2','割当戻し');db.entries.push(undoAssign);save();
+  assignTables(undoAssign,['10']);save();
+  undo();
+  check(byId('undo2').tables.length===0,'予約を卓へ割り当ててsave→undo→tablesが空に戻る');
+  const undoCancel=entry('undo3','取消戻し');db.entries.push(undoCancel);save();
+  undoCancel.cancelled=true;save();
+  undo();
+  check(!byId('undo3').cancelled,'予約を取消→undo→cancelledが戻る');
+  undoStack=[];lastSaved=JSON.stringify(db);
+  for(let i=0;i<11;i++)save();
+  check(undoStack.length===5,'11回saveを呼んでもundoStack.lengthが5を超えない');
+  undoStack=[];
+  const _beforeUndo=JSON.stringify(db);
+  undo();
+  check(JSON.stringify(db)===_beforeUndo&&undoStack.length===0,'undoStackが空のときundoを呼んでもデータが変化しない');
+  syncUndoBtn();check($('undoBtn').disabled,'戻せるものが無いとき元に戻すボタンは押せない');
+  save();check(!$('undoBtn').disabled,'操作した後は元に戻すボタンが押せるようになる');
+  undoStack=_origUndoStack;lastSaved=_origLastSaved;
+
+  /* === フォーム入力チェック === */
+  openForm('res',null);
+  check([...$('frm').querySelectorAll('input,textarea')].every(i=>i.type==='date'||i.getAttribute('autocomplete')==='off'),'入力欄は過去の入力候補を出さない設定になっている');
+  check($('frm').note.tagName==='TEXTAREA','予約フォームの要望はメモ代わりに複数行を書ける');
+  $('frm').name.value='改行メモ';$('frm').note.value='座敷希望\n21時までに退店\n子供いす2つ';
+  $('frm').querySelector('button[value="ok"]').click();
+  const multiNote=db.entries.at(-1);
+  check(multiNote.note==='座敷希望\n21時までに退店\n子供いす2つ','要望の改行がそのまま保存される');
+  date=multiNote.date;weekStart=mondayOf(date);draw();
+  const noteCell=[...document.querySelectorAll('#resList .item')].find(el=>el.querySelector('.nm').textContent==='改行メモ')?.querySelector('.note');
+  check(noteCell?.textContent.split('\n').length===3&&getComputedStyle(noteCell).whiteSpace==='pre-line','一覧では要望の改行が行として見える');
+  check($('frm').querySelector('#fPeoplePicker button.p-btn'),'人数はボタンで選ぶ');
+
+  /* === カード全体ドラッグ === */
+  date=today();weekStart=mondayOf(today());draw();
+  const cardChip=entry('card-chip','チップ本体',['1']);db.entries.push(cardChip);draw();
+  dragFromTo(document.querySelector('.chip[data-entry-id="card-chip"] .chip-name'),document.querySelector('.seat[data-no="2"]'));
+  check(cardChip.tables.join()==='2','チップ本体からのドラッグで別の卓へ移る');
+  const cardList=entry('card-list','一覧本体');db.entries.push(cardList);draw();
+  dragFromTo(document.querySelector('.item[data-entry-id="card-list"] .nm'),document.querySelector('.seat[data-no="3"]'));
+  check(cardList.tables.join()==='3','保留一覧の行本体からのドラッグで卓へ割り当てる');
+  const cardHandle=entry('card-handle','つまみ');db.entries.push(cardHandle);draw();
+  dragFromTo(document.querySelector('.item[data-entry-id="card-handle"] .drag-handle'),document.querySelector('.seat[data-no="5"]'));
+  check(cardHandle.tables.join()==='5','保留カードの⠿からの従来のドラッグも動く');
+
+  /* === チップタップと3pxドラッグ === */
+  const tapChip=entry('tap-chip','押すだけ',['6']);db.entries.push(tapChip);draw();
+  const tapChipEl=document.querySelector('.chip[data-entry-id="tap-chip"]');
+  const tapPoint=tapChipEl.getBoundingClientRect(),tapFire=(type,x=0)=>tapChipEl.dispatchEvent(new PointerEvent(type,{bubbles:true,cancelable:true,pointerId:100,pointerType:'touch',isPrimary:true,buttons:1,clientX:tapPoint.left+tapPoint.width/2+x,clientY:tapPoint.top+tapPoint.height/2}));
+  tapFire('pointerdown');tapFire('pointerup');tapChipEl.click();
+  check(tapChip.tables.join()==='6'&&$('actDlg').open,'チップを押しただけでは卓を変えず状態画面を開く');
+  $('actDlg').close();
+  dragFromTo(tapChipEl,document.querySelector('.seat[data-no="7"]'));tapChipEl.click();
+  check(tapChip.tables.join()==='7'&&!$('actDlg').open,'ドラッグ直後のクリックでは状態画面を開かない');
+  const nearTap=entry('near-tap','3px',['8']);db.entries.push(nearTap);draw();
+  const nearTapEl=document.querySelector('.chip[data-entry-id="near-tap"]'),nearPoint=nearTapEl.getBoundingClientRect(),nearFire=(type,x=0)=>nearTapEl.dispatchEvent(new PointerEvent(type,{bubbles:true,cancelable:true,pointerId:101,pointerType:'touch',isPrimary:true,buttons:1,clientX:nearPoint.left+nearPoint.width/2+x,clientY:nearPoint.top+nearPoint.height/2}));
+  nearFire('pointerdown');nearFire('pointermove',3);nearFire('pointerup',3);nearTapEl.click();
+  check(nearTap.tables.join()==='8'&&$('actDlg').open,'3pxだけ動かして離すとタップ扱いになる');
+  $('actDlg').close();
+
+  /* === 書き出しと督促 === */
+  const origCanShare=navigator.canShare, origShare=navigator.share, origDownload=downloadText;
+  let downloaded=0;downloadText=()=>{downloaded++};
+  const withShare=(shareImpl)=>{Object.defineProperty(navigator,'canShare',{value:()=>true,configurable:true});Object.defineProperty(navigator,'share',{value:shareImpl,configurable:true})};
+  const restoreShare=()=>{Object.defineProperty(navigator,'canShare',{value:origCanShare,configurable:true});Object.defineProperty(navigator,'share',{value:origShare,configurable:true})};
+  Object.defineProperty(navigator,'canShare',{value:()=>false,configurable:true});
+  check(await saveTextToFiles('{}','a.json')===true&&downloaded===1,'共有シートが使えない端末ではダウンロードで書き出す');
+  withShare(()=>Promise.reject(Object.assign(new Error('cancel'),{name:'AbortError'})));
+  check(await saveTextToFiles('{}','a.json')===false&&downloaded===1,'共有を取り消したら書き出していない扱いにする');
+  withShare(()=>Promise.reject(new Error('boom')));
+  check(await saveTextToFiles('{}','a.json')===true&&downloaded===2,'共有が失敗したらダウンロードへ切り替える');
+  withShare(()=>Promise.resolve());
+  check(await saveTextToFiles('{}','a.json')===true&&downloaded===2,'共有できたらダウンロードはしない');
+  restoreShare();downloadText=origDownload;
+
+  const staleToday=(n)=>{const d=parse(today());d.setDate(d.getDate()-n);return ymd(d)};
+  check(exportStaleDays(undefined)===Infinity,'一度も書き出していなければ督促の対象になる');
+  check(exportStaleDays(today())===0,'今日書き出していれば0日');
+  check(exportStaleDays(staleToday(EXPORT_REMIND_DAYS))>=EXPORT_REMIND_DAYS,'しきい値の日数だけ経つと督促の対象になる');
+  check(exportStaleDays(staleToday(EXPORT_REMIND_DAYS-1))<EXPORT_REMIND_DAYS,'しきい値より短ければ督促しない');
+  const staleFuture=(()=>{const d=parse(today());d.setDate(d.getDate()+3);return ymd(d)})();
+  check(exportStaleDays(staleFuture)===0,'端末の日付が巻き戻っても負の日数にならない');
+  db.lastExport=staleToday(EXPORT_REMIND_DAYS);draw();
+  check($('bkpOpen').classList.contains('warn')&&$('bkpOpen').textContent==='バックアップ','書き出しが滞るとバックアップボタンが警告色になる');
+  db.lastExport=today();draw();
+  check(!$('bkpOpen').classList.contains('warn'),'書き出した直後は警告色が消える');
+
+  /* === 折りたたみ(grip) === */
+  const gripUndo=undoStack.length, mapW=()=>$('map').getBoundingClientRect().width;
+  const openW=mapW();
+  $('grip').click();
+  check(db.leftOff&&$('left').offsetParent===null&&mapW()>openW,'持ち手を押すと保留一覧がしまわれ席図が広がる');
+  check(undoStack.length===gripUndo,'表示の切替は元に戻すの履歴を消費しない');
+  $('grip').click();
+  check(!db.leftOff&&$('left').offsetParent!==null,'もう一度押すと保留一覧が戻る');
+
+  /* === キーボード対応 === */
+  openForm('res',null);
+  fitDialogsToKeyboard(400,420,0);
+  check($('dlg').style.position==='fixed'&&$('dlg').style.maxHeight==='408px'&&$('dlg').style.top==='6px','キーボードが出たらダイアログを見えている範囲に収める');
+  fitDialogsToKeyboard(400,420,60);
+  check($('dlg').style.top==='66px','画面がずり上がった分もダイアログの位置に反映する');
+  fitDialogsToKeyboard(0,800,0);
+  check(!$('dlg').style.position&&!$('dlg').style.maxHeight&&!$('dlg').style.top,'キーボードが引っ込んだら元の中央表示に戻す');
+  fitDialogsToKeyboard(0,800,0);$('dlg').close();
+
+  /* === 今日ボタン === */
+  date=getOpenDate(addDays(today(),14));weekStart=mondayOf(date);draw();
+  $('wToday').click();
+  check(date===getOpenDate(today()),'「今日」を押すと開くべき日へ戻る');
+
+  /* === 27章 完了条件11: 1024×768ではみ出さない === */
+  const de=document.documentElement;
+  check(de.scrollWidth<=de.clientWidth&&de.scrollHeight<=de.clientHeight,
+    `完了条件11: 画面内に収まりスクロールが出ない (${de.scrollWidth}x${de.scrollHeight} <= ${de.clientWidth}x${de.clientHeight})`);
+
+  /* ==============================================================
+     28章 完了条件テスト (1〜16)
+     ============================================================== */
+  /* 1. 日付が変わった状態（today() を差し替え）で visibilitychange を発火すると、前日を開いていた画面が新しい今日へ移り、空席で名前空欄保存が来店客になる（B1） */
+  const origToday = today;
+  const tomorrowStr = addDays(origToday(), 1);
+  date = origToday(); draw();
+  today = () => tomorrowStr;
+  document.dispatchEvent(new Event('visibilitychange'));
+  check(date === getOpenDate(tomorrowStr), '28.1 B1: visibilitychangeで新しい今日へ移る');
+  document.querySelector('.seat[data-no="1"]').click();
+  $('frm').name.value = '';
+  $('frm').querySelector('button[value="ok"]').click();
+  const b1Guest = db.entries.find(e => e.date === tomorrowStr && e.tables.includes('1') && e.name === '来店客');
+  check(b1Guest && b1Guest.arrived && occOf(tomorrowStr).includes('1'), '28.1 B1: 新しい今日で名前空欄保存が来店客になる');
+  today = origToday; date = today(); draw();
+
+  /* 2. 予約の入った臨時席の「×」では席も予約も消えない（B2） */
+  addExtra(today(), '25');
+  const b2Res = entry('b2-res', '臨時予約', ['25']);
+  db.entries.push(b2Res); save(); draw();
+  const delBtn = document.querySelector('.extra-del[aria-label="追加席 25 を削除"]');
+  delBtn.click();
+  check(extraOf(today()).includes('25') && db.entries.includes(b2Res), '28.1 B2: 予約が入った臨時席の×では席も予約も消えない');
+
+  /* 3. localStorage.setItem を失敗させて予約を保存すると、db にその予約が残らず画面にも出ない（B3） */
+  const origSetItem = localStorage.setItem;
+  const countBeforeB3 = db.entries.length;
+  localStorage.setItem = () => { throw new Error('QuotaExceededError'); };
+  document.querySelector('.seat[data-no="2"]').click();
+  $('frm').name.value = '保存失敗テスト';
+  $('frm').querySelector('button[value="ok"]').click();
+  check(!db.entries.some(e => e.name === '保存失敗テスト') && db.entries.length === countBeforeB3, '28.1 B3: setItem失敗時はdbに予約が残らない');
+  check(!document.getElementById('body').textContent.includes('保存失敗テスト'), '28.1 B3: 画面にも出ない');
+  localStorage.setItem = origSetItem;
+
+  /* 4. 保留の編集画面に削除ボタンが無い（B5） */
+  const b5Entry = entry('b5-entry', '保留削除なし');
+  db.entries.push(b5Entry); draw();
+  openForm('res', b5Entry);
+  check(!$('frm').querySelector('button[value="del"]'), '28.1 B5: 保留の編集画面に削除ボタンが無い');
+  $('dlg').close();
+
+  /* 5. 使用中→食事終了→「使用中に戻す」で arrived=true かつ卓が .used（B6） */
+  date = today();
+  const b6Entry = entry('b6-entry', '復元使用中', ['17']);
+  db.entries.push(b6Entry); arrive(b6Entry);
+  leave(b6Entry);
+  check(b6Entry.gone, '食事終了でgone=true');
+  draw();
+  if ($('cxList').hidden) $('cxToggle').click();
+  const b6Item = [...$('cxList').querySelectorAll('.item')].find(it => it.querySelector('.nm')?.textContent === '復元使用中');
+  const b6RestoreBtn = b6Item.querySelector('button');
+  check(b6RestoreBtn.textContent === '使用中に戻す', '28.1 B6: 戻すボタンが「使用中に戻す」');
+  b6RestoreBtn.click();
+  check(b6Entry.arrived && !b6Entry.gone && occOf(today()).includes('17'), '28.1 B6: 使用中に戻すとarrived=trueかつoccに入る');
+  check(document.querySelector('.seat[data-no="17"]').classList.contains('used'), '28.1 B6: 卓17が.seat.used');
+
+  /* 6. 連絡済の電話待ちを待ち解除→電話待ちにすると called=false（B7） */
+  const b7Entry = entry('b7-entry', '待ち解除テスト');
+  b7Entry.kind = 'wait'; b7Entry.tel = '090-1234-5678'; b7Entry.called = true;
+  db.entries.push(b7Entry); draw();
+  const b7Card = document.querySelector('#resList .item[data-entry-id="b7-entry"]');
+  [...b7Card.querySelectorAll('.acts button')].find(b => b.textContent === '待ち解除').click();
+  check(b7Entry.kind === 'res', '待ち解除でkind===res');
+  const b7Card2 = document.querySelector('#resList .item[data-entry-id="b7-entry"]');
+  [...b7Card2.querySelectorAll('.acts button')].find(b => b.textContent === '電話待ちにする').click();
+  check(b7Entry.kind === 'wait' && b7Entry.called === false, '28.1 B7: 再び電話待ちにするとcalled=false');
+
+  /* 7. 卓に置いた電話待ちのチップに「電話待ち」の文字、状態画面の 連絡済にする で called=true（B8） */
+  const b8Entry = entry('b8-entry', '卓上待ち', ['18']);
+  b8Entry.kind = 'wait'; b8Entry.tel = '090-8888-9999'; b8Entry.called = false;
+  db.entries.push(b8Entry); draw();
+  const b8Chip = document.querySelector('.seat[data-no="18"] .chip[data-entry-id="b8-entry"]');
+  check(b8Chip.textContent.includes('電話待ち'), '28.1 B8: チップに「電話待ち」の文字');
+  b8Chip.click();
+  check($('actDlg').open, '状態画面が開く');
+  const b8CallBtn = [...$('#actBtns').querySelectorAll('button')].find(b => b.textContent === '連絡済にする');
+  check(!!b8CallBtn, '28.1 B8: 「連絡済にする」ボタンがある');
+  b8CallBtn.click();
+  check(b8Entry.called === true, '28.1 B8: called=trueになる');
+  draw();
+  const b8ChipCalled = document.querySelector('.seat[data-no="18"] .chip[data-entry-id="b8-entry"]');
+  check(b8ChipCalled.textContent.includes('連絡済'), '28.1 B8: チップに「連絡済」の文字');
+
+  /* 8. 同じ卓に3件で「他1件」を押すと #dlg は開かず、3件目の名前のボタンが出て、押すと状態ボタン画面（B9） */
+  db.entries = db.entries.filter(e => !e.tables.includes('19'));
+  const b9_1 = entry('b9-1', '組1', ['19']), b9_2 = entry('b9-2', '組2', ['19']), b9_3 = entry('b9-3', '組3', ['19']);
+  db.entries.push(b9_1, b9_2, b9_3); draw();
+  const moreChip = document.querySelector('.seat[data-no="19"] .chip:last-child');
+  check(moreChip && moreChip.textContent === '他 1件', '「他 1件」が表示される');
+  moreChip.click();
+  check($('actDlg').open && !$('dlg').open, '28.1 B9: #dlgは開かず#actDlgが開く');
+  const b9Btn = [...$('#actBtns').querySelectorAll('button')].find(b => b.textContent.includes('組3'));
+  check(!!b9Btn, '28.1 B9: 3件目の名前のボタンが出る');
+  b9Btn.click();
+  check($('actDlg').open && $('actTitle').textContent.includes('組3'), '28.1 B9: 押すと組3の状態ボタン画面になる');
+  $('actDlg').close();
+
+  /* 9. 卓マスの中に button 要素が無い（B10） */
+  const seatButtonsInside = document.querySelectorAll('.seat button');
+  check(seatButtonsInside.length === 0, '28.1 B10: 卓マスの中にbutton要素が無い');
+
+  /* 10. 複数卓の予約の状態画面の見出しに全卓番が出る（B11） */
+  const b11Entry = entry('b11-entry', '複数卓太郎', ['1', '2', '3']);
+  db.entries.push(b11Entry); draw();
+  document.querySelector('.seat[data-no="1"] .chip[data-entry-id="b11-entry"]').click();
+  check($('actDlg').open, '状態画面が開く');
+  check($('actTitle').textContent.includes('1・2・3') || $('actTitle').textContent.includes('1, 2, 3'), '28.1 B11: 見出しに全卓番が出る');
+  const b11ArriveBtn = [...$('#actBtns').querySelectorAll('button')].find(b => b.textContent === '全3卓を使用中にする');
+  check(!!b11ArriveBtn, '28.1 B11: ボタンが「全3卓を使用中にする」');
+  $('actDlg').close();
+
+  /* 11. 空席に「＋ 予約」の文字、フッターに凡例（5つの状態語）がある（U1・U2） */
+  db.entries = db.entries.filter(e => !e.tables.includes('20')); draw();
+  const seat20 = document.querySelector('.seat[data-no="20"]');
+  check(seat20.textContent.includes('＋ 予約'), '28.2 U1: 空席に「＋ 予約」の文字');
+  const legendText = document.getElementById('legend')?.textContent || '';
+  const states = ['空き', '予約', '使用中', '次に入る', '電話待ち'];
+  check(states.every(st => legendText.includes(st)), '28.2 U2: フッターに凡例(5つの状態語)がある');
+
+  /* 12. 今日以外を開くと「今日ではありません」の行が出て、今日では出ない（U3） */
+  date = today(); draw();
+  check($('notTodayBar').hidden, '28.2 U3: 今日では「今日ではありません」の行は出ない');
+  const b12Date = getOpenDate(addDays(today(), 1));
+  date = b12Date; draw();
+  check(!$('notTodayBar').hidden && $('notTodayBar').textContent.includes('今日ではありません'), '28.2 U3: 今日以外を開くと「今日ではありません」の行が出る');
+  date = today(); draw();
+
+  /* 13. 卓から開いた入力画面の保存ボタンが「卓N に予約する」、今日で名前空欄なら「来店客として使用中にする」、名前を入れると戻る（U4） */
+  date = today(); draw();
+  document.querySelector('.seat[data-no="5"]').click();
+  check($('dlg').open, '#dlgが開く');
+  const b13SaveBtn = $('frm').querySelector('#frmSaveBtn');
+  check(b13SaveBtn.textContent === '来店客として使用中にする', '28.2 U4: 今日で名前空欄なら「来店客として使用中にする」');
+  $('frm').name.value = 'お客様';
+  $('frm').name.dispatchEvent(new Event('input'));
+  check(b13SaveBtn.textContent === '卓5に予約する', '28.2 U4: 名前を入れると「卓5に予約する」');
+  $('frm').name.value = '';
+  $('frm').name.dispatchEvent(new Event('input'));
+  check(b13SaveBtn.textContent === '来店客として使用中にする', '28.2 U4: 名前を消すと戻る');
+  $('dlg').close();
+
+  /* 14. 人数・時間のボタンを押して保存すると people・time がその値になる。9名以上 で数字欄に12を入れると12（U5） */
+  document.querySelector('.seat[data-no="6"]').click();
+  $('frm').name.value = 'ボタン選択テスト';
+  const p4Btn = [...$('frm').querySelectorAll('.p-btn')].find(b => b.textContent === '4');
+  p4Btn.click();
+  const t18Btn = [...$('frm').querySelectorAll('.t-btn')].find(b => b.textContent === '18:30');
+  t18Btn.click();
+  $('frm').querySelector('button[value="ok"]').click();
+  const b14Entry = db.entries.find(e => e.name === 'ボタン選択テスト');
+  check(b14Entry && b14Entry.people === 4 && b14Entry.time === '18:30', '28.2 U5: ボタン選択でpeople=4, time=18:30');
+  openForm('res', b14Entry);
+  const pMoreBtn = [...$('frm').querySelectorAll('.p-btn')].find(b => b.textContent === '9名以上');
+  pMoreBtn.click();
+  const moreInput = $('frm').querySelector('input[name="peopleMore"]');
+  check(moreInput && moreInput.style.display !== 'none', '28.2 U5: 9名以上で数字欄が出る');
+  moreInput.value = '12';
+  moreInput.dispatchEvent(new Event('input'));
+  $('frm').querySelector('button[value="ok"]').click();
+  check(b14Entry.people === 12, '28.2 U5: 9名以上で12を入れるとpeople=12');
+
+  /* 15. 保留から開いた入力画面の卓欄に 12 を入れて保存すると卓12に割り当て、1,8 は拒否される（U9） */
+  $('addRes').click();
+  check($('dlg').open, '保留から入力画面が開く');
+  const tblInput = $('frm').querySelector('input[name="tables"]');
+  check(!!tblInput, '28.2 U9: 卓欄が存在する');
+  $('frm').name.value = '卓欄テスト';
+  tblInput.value = '1, 8'; // カウンターとテーブル混在
+  $('frm').querySelector('button[value="ok"]').click();
+  check(!db.entries.some(e => e.name === '卓欄テスト'), '28.2 U9: 1,8は拒否される');
+  check(!$('frm').querySelector('.message').hidden, 'エラーメッセージが表示される');
+  tblInput.value = '12';
+  $('frm').querySelector('button[value="ok"]').click();
+  const b15Entry = db.entries.find(e => e.name === '卓欄テスト');
+  check(b15Entry && b15Entry.tables.join() === '12', '28.2 U9: 12を入れて保存すると卓12に割り当てる');
+
+  /* 16. 1024×768ではみ出さない。入力画面を開いた状態でも収まる */
+  openForm('res', null);
+  const deForm = document.documentElement;
+  check(deForm.scrollWidth <= deForm.clientWidth && deForm.scrollHeight <= deForm.clientHeight,
+    `28.2 完了条件16: 入力画面を開いた状態でも収まる (${deForm.scrollWidth}x${deForm.scrollHeight} <= ${deForm.clientWidth}x${deForm.clientHeight})`);
+  $('dlg').close();
+
+  /* ==============================================================
+     F1〜F18 完了条件テスト
+     ============================================================== */
+  /* --- F1: load() と importText() の両方で正規化関数を通す --- */
+  const brokenDataRaw = JSON.stringify({
+    entries: [
+      { name: 'F1不完全', date: today() },
+      { name: 'F1日付不正', date: 12345 }
+    ],
+    fs: 'invalid'
+  });
+  localStorage.setItem(KEY, brokenDataRaw);
+  const loadedF1 = load();
+  check(loadedF1 && Array.isArray(loadedF1.extra) && loadedF1.occ && typeof loadedF1.occ === 'object' && !Array.isArray(loadedF1.occ), 'F1: loadでextra・occ欠落が補完される');
+  check(loadedF1.entries.length === 1 && loadedF1.entries[0].name === 'F1不完全' && loadedF1.entries[0].id && Array.isArray(loadedF1.entries[0].tables) && loadedF1.entries[0].kind === 'res' && loadedF1.entries[0].people === null && loadedF1.entries[0].arrived === false, 'F1: 不正dateが除外され項目欠けが正規化される');
+  check(loadedF1.fs === 19, 'F1: fsが数値でなければ19になる');
+  check(importText(JSON.stringify({ v: 1, data: { entries: [{ name: 'F1インポート', date: today() }] } })), 'F1: importTextでも正規化されて成功する');
+  check(db.entries[0].name === 'F1インポート' && Array.isArray(db.entries[0].tables), 'F1: importTextで正規化されたdbが代入される');
+  draw();
+
+  /* --- F2: 臨時席で食事終了／取消しても臨時席が自動で消えない --- */
+  date = today();
+  const f2Seat = '35';
+  addExtra(today(), f2Seat); draw();
+  check(extraOf(today()).includes(f2Seat), 'F2準備: 臨時席35が追加された');
+  document.querySelector(`.seat[data-no="${f2Seat}"]`).click();
+  $('frm').name.value = 'F2客';
+  $('frm').querySelector('button[value="ok"]').click();
+  const f2Entry = db.entries.find(e => e.name === 'F2客');
+  check(f2Entry && f2Entry.tables.join() === f2Seat, 'F2: 卓35に予約作成');
+  document.querySelector(`.seat[data-no="${f2Seat}"] .chip`).click();
+  [...$('#actBtns').querySelectorAll('button')].find(b => b.textContent === '使用中にする').click();
+  check(f2Entry.arrived && occOf(today()).includes(f2Seat), 'F2: 使用中になった');
+  document.querySelector(`.seat[data-no="${f2Seat}"] .chip`).click();
+  [...$('#actBtns').querySelectorAll('button')].find(b => b.textContent === '食事終了').click();
+  check(f2Entry.gone, 'F2: 食事終了になった');
+  check(extraOf(today()).includes(f2Seat) && document.querySelector(`.seat[data-no="${f2Seat}"]`), 'F2: 食事終了後も臨時席は自動で消えず画面に残る');
+  const delF2Btn = document.querySelector(`.extra-del[aria-label="追加席 ${f2Seat} を削除"]`);
+  delF2Btn.click();
+  check(!extraOf(today()).includes(f2Seat), 'F2: 臨時席は×ボタンでのみ消える');
+
+  /* --- F3: 戻す時、存在しない卓番を取り除き、全部無くなれば卓未定(arrived=false)＋ヒント表示 --- */
+  const f3Seat = '36';
+  addExtra(today(), f3Seat); draw();
+  document.querySelector(`.seat[data-no="${f3Seat}"]`).click();
+  $('frm').name.value = 'F3客';
+  $('frm').querySelector('button[value="ok"]').click();
+  const f3Entry = db.entries.find(e => e.name === 'F3客');
+  document.querySelector(`.seat[data-no="${f3Seat}"] .chip`).click();
+  [...$('#actBtns').querySelectorAll('button')].find(b => b.textContent === '使用中にする').click();
+  document.querySelector(`.seat[data-no="${f3Seat}"] .chip`).click();
+  [...$('#actBtns').querySelectorAll('button')].find(b => b.textContent === '食事終了').click();
+  check(f3Entry.gone, 'F3: 食事終了');
+  delExtra(f3Seat);
+  check(!extraOf(today()).includes(f3Seat), 'F3: 臨時席36を削除');
+  if ($('cxList').hidden) $('cxToggle').click();
+  const f3Item = [...$('cxList').querySelectorAll('.item')].find(it => it.querySelector('.nm')?.textContent === 'F3客');
+  f3Item.querySelector('button').click(); // 使用中に戻す
+  check(f3Entry && f3Entry.tables.length === 0 && !f3Entry.arrived && !f3Entry.gone, 'F3: 存在しない卓36が取り除かれ卓未定(arrived=false)として戻る');
+  check($('hint').textContent.includes('卓36が無いので卓未定に戻しました'), 'F3: ヒント欄に卓36が無いので卓未定に戻しましたと表示される');
+
+  /* --- F4: 卓妥当性判定を変更先の日付で判定、その日に無い臨時席は拒否 --- */
+  const f4Seat = '37';
+  addExtra(today(), f4Seat); draw();
+  const f4DateOther = getOpenDate(addDays(today(), 1));
+  const f4Entry = entry('f4-entry', 'F4客');
+  db.entries.push(f4Entry); draw();
+  openForm('res', f4Entry);
+  $('frm').date.value = f4DateOther;
+  $('frm').querySelector('input[name="tables"]').value = f4Seat;
+  $('frm').querySelector('button[value="ok"]').click();
+  check(!db.entries.some(e => e.name === 'F4客' && e.date === f4DateOther), 'F4: 変更先の日付に無い臨時席37は保存拒否される');
+  check($('frm').querySelector('.message').textContent.includes('卓37はその日にありません'), 'F4: 「卓37はその日にありません」と表示される');
+  $('dlg').close();
+  delExtra(f4Seat);
+
+  /* --- F5: 保存拒否された編集内容が既存予約に先に書き込まれない --- */
+  const f5Entry = entry('f5-entry', 'F5元名');
+  db.entries.push(f5Entry); draw();
+  openForm('res', f5Entry);
+  $('frm').name.value = 'F5変更名';
+  $('frm').querySelector('input[name="tables"]').value = '1, 8';
+  $('frm').querySelector('button[value="ok"]').click();
+  check(f5Entry.name === 'F5元名', 'F5: 卓エラー時に既存予約のnameは書き換わっていない');
+  $('dlg').close();
+  check(f5Entry.name === 'F5元名', 'F5: フォームを閉じた後もF5元名のまま');
+
+  /* --- F6: 日付変更で開いているdialogがすべて閉じる --- */
+  document.querySelector('.seat[data-no="1"]').click();
+  check($('dlg').open, 'F6準備: ダイアログが開いている');
+  const origTodayF6 = today;
+  const origLastTodayF6 = lastToday;
+  lastToday = origTodayF6();
+  const f6Tomorrow = addDays(origTodayF6(), 1);
+  today = () => f6Tomorrow;
+  checkDayChange();
+  check(!$('dlg').open, 'F6: checkDayChangeで開いていたdialogがすべて閉じられる');
+  today = origTodayF6; lastToday = origLastTodayF6; date = today(); draw();
+
+  /* --- F7: undo()のsetItem失敗でdb・lastSaved・undoStackが壊れない --- */
+  const f7CountBefore = db.entries.length;
+  const f7Entry = entry('f7-entry', 'F7客');
+  db.entries.push(f7Entry); save();
+  check(db.entries.length === f7CountBefore + 1, 'F7: 1件保存');
+  const origSetItemF7 = localStorage.setItem;
+  localStorage.setItem = () => { throw new Error('QuotaExceededError'); };
+  undo();
+  check(db.entries.some(e => e.name === 'F7客'), 'F7: setItem失敗時はdbは巻き戻らず元の状態を維持');
+  localStorage.setItem = origSetItemF7;
+  undo();
+  check(!db.entries.some(e => e.name === 'F7客'), 'F7: 正常なundoで予約が戻る');
+
+  /* --- F8: 複数卓のチップを同じ予約の別卓へ動かしても重複しない --- */
+  const f8Entry = entry('f8-entry', 'F8客', ['1', '2']);
+  db.entries.push(f8Entry); draw();
+  const f8Chip1 = document.querySelector('.seat[data-no="1"] .chip[data-entry-id="f8-entry"]');
+  const f8Seat2 = document.querySelector('.seat[data-no="2"]');
+  dragFromTo(f8Chip1, f8Seat2);
+  check(f8Entry.tables.length === 2 && f8Entry.tables.includes('1') && f8Entry.tables.includes('2') && !f8Entry.tables.every(t => t === '2'), 'F8: 複数卓のチップを同予約の別卓へ動かしても移動せず重複しない');
+
+  /* --- F9: 使用中の予約で卓欄を空にして保存するとunassignされarrived=false --- */
+  const f9Entry = entry('f9-entry', 'F9客', ['3']);
+  db.entries.push(f9Entry); arrive(f9Entry);
+  check(f9Entry.arrived && occOf(today()).includes('3'), 'F9準備: 卓3で使用中');
+  openEdit(f9Entry, 3);
+  $('editFrm').querySelector('input[name="tables"]').value = '';
+  $('editFrm').querySelector('button[value="save"]').click();
+  check(f9Entry.tables.length === 0 && !f9Entry.arrived && !occOf(today()).includes('3'), 'F9: openEditで卓欄を空にして保存するとunassignされarrived=falseかつocc解除');
+  assignTables(f9Entry, ['3']); arrive(f9Entry);
+  check(f9Entry.arrived && occOf(today()).includes('3'), 'F9準備2: 卓3で使用中');
+  openForm('res', f9Entry);
+  $('frm').querySelector('input[name="tables"]').value = '';
+  $('frm').querySelector('button[value="ok"]').click();
+  check(f9Entry.tables.length === 0 && !f9Entry.arrived && !occOf(today()).includes('3'), 'F9: openFormで卓欄を空にして保存するとunassignされarrived=falseかつocc解除');
+
+  /* --- F10: 長い名前で卓未定カードが横にはみ出さず、チップで人数・時間が隠れない --- */
+  const f10Name = '山田太郎家ご一同様';
+  const f10Entry = entry('f10-entry', f10Name);
+  f10Entry.people = 8; f10Entry.time = '19:00'; f10Entry.tel = '090-1234-5678';
+  db.entries.push(f10Entry); draw();
+  const f10Card = document.querySelector('#resList .item[data-entry-id="f10-entry"]');
+  const l1El = f10Card.querySelector('.l1');
+  check(getComputedStyle(l1El).flexWrap === 'wrap', 'F10: .item .l1 が flex-wrap:wrap になっている');
+  check(f10Card.scrollWidth <= f10Card.clientWidth + 5, `F10: 卓未定カードでメタが折り返され横スクロールが出ない (${f10Card.scrollWidth} <= ${f10Card.clientWidth})`);
+  assignTables(f10Entry, ['8']); draw();
+  const f10Chip = document.querySelector('.seat[data-no="8"] .chip[data-entry-id="f10-entry"]');
+  const f10People = f10Chip.querySelector('.chip-people');
+  const f10Time = f10Chip.querySelector('.chip-time');
+  check(f10People && f10Time && f10People.offsetHeight > 0 && f10Time.offsetHeight > 0, 'F10: チップ内で人数と時間の行が隠れず残っている');
+  unassign(f10Entry);
+
+  /* --- F11: 来店済みの電話待ちに電話待ち札と連絡済にするが出ない --- */
+  const f11Entry = entry('f11-entry', 'F11待ち', ['11']);
+  f11Entry.kind = 'wait'; f11Entry.tel = '090-0000-1111';
+  db.entries.push(f11Entry); arrive(f11Entry); draw();
+  const f11Chip = document.querySelector('.seat[data-no="11"] .chip[data-entry-id="f11-entry"]');
+  check(!f11Chip.querySelector('.badge') || f11Chip.querySelector('.badge').textContent !== '電話待ち', 'F11: 来店済みの電話待ちチップに電話待ち札が出ない');
+  f11Chip.click();
+  check($('actDlg').open, 'F11: 状態画面が開く');
+  const f11Btns = [...$('#actBtns').querySelectorAll('button')].map(b => b.textContent);
+  check(!f11Btns.includes('連絡済にする') && !f11Btns.includes('連絡済を外す'), 'F11: 来店済みの状態画面に「連絡済にする」ボタンが出ない');
+  $('actDlg').close();
+
+  /* --- F12: 30分刻み以外の時刻の予約を編集保存しても時刻が消えない --- */
+  const f12Entry = entry('f12-entry', 'F12客', ['12']);
+  f12Entry.time = '18:15';
+  db.entries.push(f12Entry); draw();
+  openEdit(f12Entry, 12);
+  const f12Btn1815 = [...$('editFrm').querySelectorAll('.t-btn')].find(b => b.textContent === '18:15');
+  check(f12Btn1815 && f12Btn1815.classList.contains('on'), 'F12: 18:15ボタンが格子の先頭に追加され選択状態になっている');
+  $('editFrm').querySelector('button[value="save"]').click();
+  check(f12Entry.time === '18:15', 'F12: 18:15の予約を編集保存しても時刻が維持される');
+
+  /* --- F13: 文字 大／小 が undoStack を消費しない --- */
+  const f13Entry = entry('f13-entry', 'F13客');
+  db.entries.push(f13Entry); save();
+  const f13StackCount = undoStack.length;
+  for (let i = 0; i < 6; i++) {
+    $('fsUp').click();
+  }
+  check(undoStack.length === f13StackCount, 'F13: 文字大を6回押してもundoStackの件数は増えない');
+  $('undoBtn').click();
+  check(!db.entries.some(e => e.name === 'F13客'), 'F13: 文字大の後でも元に戻すで直前の予約操作が元に戻る');
+
+  /* --- F14: 「終了・取消」を開いたまま最後の1件を戻すと閉じられてボタンが「表示」disabled --- */
+  db.entries.forEach(e => { e.cancelled = false; e.gone = false; });
+  const f14Entry = entry('f14-entry', 'F14客');
+  f14Entry.cancelled = true;
+  db.entries.push(f14Entry); draw();
+  const cxToggleBtn = $('cxToggle');
+  if ($('cxList').hidden) cxToggleBtn.click();
+  check(!$('cxList').hidden, 'F14: 一覧が開いている');
+  const f14Item = [...$('cxList').querySelectorAll('.item')].find(it => it.querySelector('.nm')?.textContent === 'F14客');
+  f14Item.querySelector('button').click(); // 予約に戻す
+  check($('cxList').hidden, 'F14: 最後の1件を戻すと一覧が閉じる');
+  check(cxToggleBtn.textContent === '表示' && cxToggleBtn.disabled, 'F14: ボタン文言が「表示」に戻りdisabledになる');
+
+  /* --- F15: 全角数字が卓欄で半角化され、臨時席で重複作成されない --- */
+  $('addRes').click();
+  $('frm').name.value = 'F15全角卓';
+  $('frm').querySelector('input[name="tables"]').value = '１２'; // 全角数字
+  $('frm').querySelector('button[value="ok"]').click();
+  const f15Res = db.entries.find(e => e.name === 'F15全角卓');
+  check(f15Res && f15Res.tables.join() === '12', 'F15: 全角数字１２が半角12として正常に割り当て保存される');
+  $('exNo').value = '１'; // 全角数字（既に卓1が存在する）
+  $('exAdd').click();
+  check(!extraOf(today()).includes('1') && !extraOf(today()).includes('１'), 'F15: 全角数字１の臨時席追加は半角1と重複判定されて拒否される');
+  $('exNo').value = '';
+
+  /* --- F16: ファイル読み戻しの確定時に saveSnapshot('manual') の完了を待ってから置き換える --- */
+  const f16Entry = entry('f16-entry', 'F16保存直前データ');
+  db.entries.push(f16Entry); draw();
+  const f16ImportJson = JSON.stringify({ v: 1, data: { entries: [entry('f16-after', 'F16新データ')], extra: [], occ: {}, fs: 19 } });
+  await saveSnapshot('manual');
+  const snapAfter = await listSnapshots();
+  const latestSnap = snapAfter.sort((a,b)=>String(b.at).localeCompare(String(a.at)))[0];
+  check(latestSnap && latestSnap.text.includes('F16保存直前データ'), 'F16: 置き換え前に現在の状態の控えが自動保存される');
+  importText(f16ImportJson); save(); draw();
+  check(db.entries.some(e => e.name === 'F16新データ'), 'F16: 控え保存後に新データに置き換わる');
+
+  /* --- F17: 文字最大(fs=24)でもダイアログが収まり保存ボタンが常に見える --- */
+  db.fs = 24; draw();
+  openForm('res', null);
+  const dlgEl = $('dlg');
+  const stickyWide = $('frm').querySelector('.wide:last-of-type');
+  check(dlgEl.offsetHeight <= 768, 'F17: fs=24でもダイアログの高さが画面内に収まる');
+  check(getComputedStyle(stickyWide).position === 'sticky', 'F17: 保存・閉じるの行がposition:stickyで常に見える');
+  dlgEl.close();
+  db.fs = 17; draw();
+
+  /* --- F18: 卓欄に inputmode="numeric" が無い --- */
+  openForm('res', null);
+  const formTblInput = $('frm').querySelector('input[name="tables"]');
+  check(!formTblInput.hasAttribute('inputmode'), 'F18: openFormの卓欄にinputmode属性が無い');
+  $('dlg').close();
+  openEdit(f15Res, 12);
+  const editTblInput = $('editFrm').querySelector('input[name="tables"]');
+  check(!editTblInput.hasAttribute('inputmode'), 'F18: openEditの卓欄にinputmode属性が無い');
+  $('editDlg').close();
+
+  db=JSON.parse(bk);date=oldDate;weekStart=oldWeekStart;save();draw();
+  window.alert=_origAlert;
+  const resMsg=`self-check passed: ${checks}件`;
+  document.title=resMsg;
+  document.body.setAttribute('data-test-result',resMsg);
+  console.log(resMsg);
+  console.warn(resMsg);
+  }catch(err){
+    window.alert=_origAlert;
+    const errMsg=`self-check failed: ${err.message}`;
+    document.title=errMsg;
+    document.body.setAttribute('data-test-result',errMsg);
+    console.error(errMsg);
+    throw err;
+  }
+})();
+</script>
+</body>
+</html>

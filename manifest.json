@@ -1,0 +1,10 @@
+{
+  "name": "一平 予約・席管理",
+  "short_name": "一平",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "orientation": "landscape",
+  "background_color": "#1A1513",
+  "theme_color": "#1A1513",
+  "icons": [{"src": "icon.svg", "sizes": "any", "type": "image/svg+xml"}]
+}
