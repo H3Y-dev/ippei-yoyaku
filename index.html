@@ -894,6 +894,8 @@ function openActDlg(e,no){
   };
   if(isToday && !e.arrived) addBtn(nTbl>1 ? `全${nTbl}卓を使用中にする` : '使用中にする','on',()=>{arrive(e)});
   if(isToday && e.arrived)  addBtn(nTbl>1 ? `全${nTbl}卓を食事終了` : '食事終了','on',()=>{leave(e)});
+  // 間違えて使用中にしたとき、予約は残したまま来店前に戻す（2026-09-29）
+  if(e.arrived) addBtn('使用中を解除（予約に戻す）','',()=>{e.arrived=false;e.tables.forEach(no=>setOcc(no,false));save();draw()});
   if(e.kind==='wait' && !e.arrived){
     if(!e.called) addBtn('連絡済にする','',()=>{e.called=true;save();draw()});
     else addBtn('連絡済を外す','',()=>{e.called=false;save();draw()});
@@ -1801,6 +1803,11 @@ if(location.search.includes('test=1')) (async()=>{
   document.querySelector('.seat[data-no="14"] .chip').click();
   [...document.querySelectorAll('#actBtns button')].find(b=>b.textContent==='使用中にする').click();
   check(document.querySelector('.seat[data-no="14"]').classList.contains('used'),'使用中にすると卓14が青い');
+  document.querySelector('.seat[data-no="14"] .chip').click();
+  [...document.querySelectorAll('#actBtns button')].find(b=>b.textContent==='使用中を解除（予約に戻す）').click();
+  check(!document.querySelector('.seat[data-no="14"]').classList.contains('used')&&!occOf(today()).includes('14')&&document.querySelector('.seat[data-no="14"] .chip'),'使用中を解除すると青が外れ、予約は卓14に残る');
+  document.querySelector('.seat[data-no="14"] .chip').click();
+  [...document.querySelectorAll('#actBtns button')].find(b=>b.textContent==='使用中にする').click();
   document.querySelector('.seat[data-no="14"] .chip').click();
   [...document.querySelectorAll('#actBtns button')].find(b=>b.textContent==='予約を取り消す').click();
   check(!document.querySelector('.seat[data-no="14"]').classList.contains('used')&&!occOf(today()).includes('14'),'使用中の予約を取消すと卓14の青が外れ、occからも外れる');
