@@ -178,6 +178,8 @@ header h1{font-size:1em;margin:0 .4em 0 0;font-weight:700;letter-spacing:.22em}
 .extra .seat{min-width:0}
 .extra-del{flex:none;width:1.65em;padding:0;border-radius:7px;color:var(--kinari);opacity:.7}
 .hint{font-size:.8em;color:var(--kinari);opacity:.65;padding:0 .2em}
+.awake-btn{font-size:.8em;padding:.2em .6em}
+.awake-btn.off{border-color:var(--enji-label);color:var(--enji-label)}
 #bkpOpen.warn{border-color:var(--enji);background:var(--enji);color:var(--kinari);font-weight:700}
 #bkpLastExport.warn{color:var(--enji-label);font-weight:700}
 #undoBtn:not(:disabled){border-color:var(--karashi);color:var(--karashi);font-weight:700}
@@ -236,6 +238,7 @@ form.f .message{grid-column:1/-1;margin:0;color:var(--enji-label);font-size:.85e
 
 <header>
   <h1>一平</h1>
+  <button id="awakeBtn" class="awake-btn off" type="button">画面: 確認中</button>
   <span class="grow"></span>
   <button id="bookBtn" class="book-btn">予約帳</button>
   <button id="wPrev">‹ 前週</button>
@@ -302,6 +305,18 @@ form.f .message{grid-column:1/-1;margin:0;color:var(--enji-label);font-size:.85e
   <div id="actTimers" style="grid-column:1/-1;width:100%"></div>
 </form></dialog>
 <dialog id="editDlg"><form class="f" method="dialog" id="editFrm" autocomplete="off"></form></dialog>
+<dialog id="awakeDlg"><form class="f" method="dialog">
+  <h3 style="grid-column:1/-1;margin:0">画面を消さない・暗くしない</h3>
+  <p id="awakeNow" style="grid-column:1/-1;margin:0"></p>
+  <ol style="grid-column:1/-1;margin:0;padding-left:1.4em;line-height:1.7">
+    <li>設定 › 画面表示と明るさ › <b>自動ロック → なし</b></li>
+    <li>設定 › アクセシビリティ › 画面表示とテキストサイズ › <b>明るさの自動調節 → オフ</b></li>
+    <li>コントロールセンターで<b>明るさを上げておく</b></li>
+    <li><b>低電力モードはオフ</b>、<b>充電したまま</b>使う</li>
+  </ol>
+  <p style="grid-column:1/-1;margin:0;font-size:.85em;opacity:.8">明るさはアプリからは変えられません。iPadの設定で一度だけ変えてください。</p>
+  <div class="wide" style="grid-column:1/-1"><button value="close" type="submit" class="on">閉じる</button></div>
+</form></dialog>
 <dialog id="askDlg"><form class="f" method="dialog" id="askFrm">
   <h3 id="askMessage"></h3>
   <div class="wide"><button value="cancel" type="button" autofocus>やめる</button><button value="yes" type="button" class="on">終了</button></div>
@@ -1785,13 +1800,55 @@ if(loadFailed&&!location.search.includes('test=1')){
 }
 if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});
 // 作業中にiPadがスリープしないようにする
-if ('wakeLock' in navigator) {
-  let wl = null;
-  const reqWl = () => navigator.wakeLock.request('screen').then(l => wl = l).catch(() => {});
-  reqWl();
-  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') reqWl(); });
-  document.addEventListener('pointerdown', () => reqWl(), { once: true });
+/* ---------- 画面を消さない ----------
+   Wake Lockは iPadOS 16.4〜18.3 のホーム画面アプリでは効かない（WebKit bug 254545）。
+   店のiPad（第6世代）はiPadOS 17止まりなので、音なしのループ動画を再生して画面を保つ方法も併用する。
+   動画データは NoSleep.js 0.12.0（MIT License, (c) Rich Tibbett）のもの。明るさはWebからは変えられない。 */
+const AWAKE_MP4="data:video/mp4;base64,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";
+let awakeState='off', awakeLock=null, awakeVideo=null;
+const isIOSApp=()=>navigator.standalone===true;
+function setAwake(st){
+  awakeState=st;
+  const b=$('awakeBtn');if(!b) return;
+  b.textContent=st==='off'?'画面: 消える設定':'画面: 消えない';
+  b.classList.toggle('off',st==='off');
 }
+async function keepAwake(){
+  if(location.search.includes('test=1')&&!keepAwake.allowInTest) return;
+  let ok=false;
+  if(navigator.wakeLock){
+    try{
+      awakeLock=await navigator.wakeLock.request('screen');ok=true;
+      awakeLock.addEventListener('release',()=>{if(awakeState==='lock')setAwake('off')});
+    }catch(_e){}
+  }
+  // ホーム画面アプリのiOSは request が通っても効かないことがあるので、動画も回す
+  if(!ok||isIOSApp()){
+    try{
+      if(!awakeVideo){
+        awakeVideo=document.createElement('video');
+        awakeVideo.muted=true;awakeVideo.loop=true;awakeVideo.playsInline=true;
+        awakeVideo.setAttribute('muted','');awakeVideo.setAttribute('playsinline','');
+        awakeVideo.style.cssText='position:fixed;width:1px;height:1px;opacity:0;pointer-events:none;bottom:0;left:0';
+        awakeVideo.src=AWAKE_MP4;
+        document.body.appendChild(awakeVideo);
+      }
+      await awakeVideo.play();ok=true;setAwake('video');return;
+    }catch(_e){}
+  }
+  setAwake(ok?'lock':'off');
+}
+keepAwake();
+// iOSは操作なしでは再生・要求が許されない。タップのたびに、止まっていれば取り直す
+document.addEventListener('pointerdown',()=>{if(awakeState==='off'||(awakeVideo&&awakeVideo.paused))keepAwake()});
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')keepAwake()});
+$('awakeBtn').onclick=()=>{
+  keepAwake();
+  $('awakeNow').textContent=awakeState==='off'
+    ?'いまは、しばらく触らないと画面が消える状態です。下の設定をしてください。'
+    :'アプリ側で画面を消さないようにしています。明るさが落ちないよう、下の設定もしてください。';
+  const d=$('awakeDlg');d.showModal();noKeyboard(d);
+};
 if(!location.search.includes('test=1')){
   createDailySnapshot();
   navigator.storage?.persist?.().catch(()=>{});
@@ -2942,6 +2999,33 @@ if(location.search.includes('test=1')) (async()=>{
   check(restoredChipTimers && restoredChipTimers.querySelectorAll('.badge').length === 2, 'B3: 使用中に戻すと札が復活する');
 
   nowMs = origNowMs;
+
+  /* === バッチ6: 画面を消さない === */
+  {
+    const origWL=Object.getOwnPropertyDescriptor(Navigator.prototype,'wakeLock');
+    const origPlay=HTMLMediaElement.prototype.play;
+    keepAwake.allowInTest=true;
+    try{
+      // Wake Lockが無い端末: 動画で保つ
+      Object.defineProperty(Navigator.prototype,'wakeLock',{configurable:true,get:()=>undefined});
+      HTMLMediaElement.prototype.play=function(){return Promise.resolve()};
+      await keepAwake();
+      check(awakeState==='video'&&awakeVideo&&awakeVideo.muted&&awakeVideo.loop&&awakeVideo.src.startsWith('data:video/mp4'),'画面: Wake Lockが無ければ音なしループ動画で保つ');
+      check($('awakeBtn').textContent==='画面: 消えない'&&!$('awakeBtn').classList.contains('off'),'画面: 保てているときは「画面: 消えない」と文字で出る');
+      // 要求も再生も失敗: 例外を出さず「消える設定」と出す
+      HTMLMediaElement.prototype.play=function(){return Promise.reject(new Error('NotAllowed'))};
+      Object.defineProperty(Navigator.prototype,'wakeLock',{configurable:true,get:()=>({request:()=>Promise.reject(new Error('denied'))})});
+      let threw=false;try{await keepAwake()}catch(_e){threw=true}
+      check(!threw&&awakeState==='off'&&$('awakeBtn').textContent==='画面: 消える設定','画面: 失敗しても例外を出さず「画面: 消える設定」と出る');
+      $('awakeBtn').click();
+      check($('awakeDlg').open&&$('awakeDlg').textContent.includes('自動ロック → なし')&&$('awakeDlg').textContent.includes('明るさの自動調節 → オフ'),'画面: ボタンを押すと設定の手順が出る');
+      $('awakeDlg').close();
+    }finally{
+      if(origWL)Object.defineProperty(Navigator.prototype,'wakeLock',origWL);else delete Navigator.prototype.wakeLock;
+      HTMLMediaElement.prototype.play=origPlay;keepAwake.allowInTest=false;
+      if(awakeVideo){awakeVideo.remove();awakeVideo=null}
+    }
+  }
 
   /* === バッチ4: 予約帳（月のカレンダー → その日の席の画面へ） === */
   {
