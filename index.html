@@ -46,6 +46,27 @@ header h1{font-size:1em;margin:0 .4em 0 0;font-weight:700;letter-spacing:.22em}
 .sat{color:var(--karashi)}.sun{color:var(--enji-label)}
 
 #body{flex:1;display:flex;gap:.5em;padding:0 .6em .6em;min-height:0}
+#body[hidden],#dates[hidden]{display:none!important}
+/* 予約帳: 月のカレンダー。日付を押すとその日の席の画面へ（予約の作り方は席の画面と同じ） */
+#book{flex:1;display:flex;flex-direction:column;padding:.4em .6em .6em;min-height:0;gap:.4em}
+#book[hidden]{display:none}
+.book-head{display:flex;align-items:center;gap:.5em;flex:none}
+.book-head .grow{flex:1}
+.book-head h2{margin:0 .4em;font-size:1.15em;letter-spacing:.08em}
+.book-hint{font-size:.85em;color:var(--kinari);opacity:.7}
+.book-grid{flex:1;display:grid;grid-template-columns:repeat(7,1fr);grid-template-rows:auto repeat(6,1fr);gap:4px;min-height:0}
+.book-grid .wd{font-size:.8em;text-align:center;opacity:.7}
+.book-grid .day{display:flex;flex-direction:column;align-items:flex-start;justify-content:space-between;padding:.3em .45em;text-align:left;min-height:0;border-radius:6px}
+.book-grid .day .dn{font-size:1.05em;font-weight:700}
+.book-grid .day .cnt{align-self:flex-end;font-size:.95em;font-weight:700}
+.book-grid .day .cnt.zero{opacity:.4;font-weight:400}
+.book-grid .day.other{opacity:.45}
+.book-grid .day.today{outline:2px solid var(--enji-label)}
+.book-grid .day.sel{background:color-mix(in srgb,var(--enji) 35%,var(--sumi-lit))}
+.book-grid .day.sun .dn{color:#e88}
+.book-grid .day.sat .dn{color:#8ae}
+.book-grid .day:disabled{opacity:.3;cursor:default}
+.book-btn.on{background:var(--enji);color:#fff}
 #left{width:30%;min-width:280px;max-width:300px;display:flex;flex-direction:column;gap:.5em;min-height:0}
 #body.left-off #left{display:none}
 #grip{flex:none;width:2em;padding:0;writing-mode:vertical-rl;letter-spacing:.3em;
@@ -216,6 +237,7 @@ form.f .message{grid-column:1/-1;margin:0;color:var(--enji-label);font-size:.85e
 <header>
   <h1>一平</h1>
   <span class="grow"></span>
+  <button id="bookBtn" class="book-btn">予約帳</button>
   <button id="wPrev">‹ 前週</button>
   <button id="wToday">今日</button>
   <button id="wNext">翌週 ›</button>
@@ -228,6 +250,16 @@ form.f .message{grid-column:1/-1;margin:0;color:var(--enji-label);font-size:.85e
 <div id="dates"></div>
 <div id="notTodayBar" class="not-today-bar" hidden></div>
 
+<div id="book" hidden>
+  <div class="book-head">
+    <button id="bookPrev" type="button">‹ 前の月</button>
+    <h2 id="bookTitle"></h2>
+    <button id="bookNext" type="button">次の月 ›</button>
+    <span class="grow"></span>
+    <span class="book-hint">日付を押すと、その日の席へ移ります</span>
+  </div>
+  <div class="book-grid" id="bookGrid"></div>
+</div>
 <div id="body">
   <div id="left">
     <div class="box" style="flex:1">
@@ -908,8 +940,39 @@ function drawMap(){
   m.appendChild(main);
 }
 
+let view='seat';   // 'seat' | 'book'。保存しない（起動時は必ず席の画面）
+let bookMonth=null; // 予約帳で表示中の月の1日（YYYY-MM-01）
+function drawBook(){
+  if(!bookMonth) bookMonth=date.slice(0,8)+'01';
+  const m0=parse(bookMonth);
+  $('bookTitle').textContent=`${m0.getFullYear()}年${m0.getMonth()+1}月`;
+  const g=$('bookGrid');g.innerHTML='';
+  WD.forEach(w=>{const h=document.createElement('div');h.className='wd';h.textContent=w;g.appendChild(h)});
+  // 日曜始まりで6週分（月によって行数を変えると押す位置がずれるため固定）
+  const start=addDays(bookMonth,-m0.getDay());
+  for(let i=0;i<42;i++){
+    const s=addDays(start,i),d=parse(s),wd=d.getDay();
+    const b=document.createElement('button');b.type='button';b.dataset.date=s;
+    b.className='day'+(d.getMonth()!==m0.getMonth()?' other':'')+(s===today()?' today':'')+(s===date?' sel':'')+(wd===0?' sun':wd===6?' sat':'');
+    const dn=document.createElement('span');dn.className='dn';dn.textContent=d.getDate();b.appendChild(dn);
+    const cnt=document.createElement('span');
+    if(CLOSED_WEEKDAYS.includes(wd)){b.disabled=true;cnt.className='cnt zero';cnt.textContent='定休日'}
+    else{
+      const n=db.entries.filter(e=>e.date===s&&!e.cancelled&&!e.gone).length;
+      cnt.className='cnt'+(n?'':' zero');cnt.textContent=n?`予約 ${n}件`:'予約なし';
+      b.onclick=()=>{date=s;weekStart=mondayOf(s);view='seat';draw()};
+    }
+    b.appendChild(cnt);g.appendChild(b);
+  }
+}
 function draw(){
   document.documentElement.style.setProperty('--fs',db.fs+'px');
+  const isBook=view==='book';
+  $('book').hidden=!isBook;$('body').hidden=isBook;$('dates').hidden=isBook;
+  $('bookBtn').classList.toggle('on',isBook);
+  $('bookBtn').textContent=isBook?'席へ戻る':'予約帳';
+  ['wPrev','wNext','wToday'].forEach(id=>{$(id).hidden=isBook});
+  if(isBook){$('notTodayBar').hidden=true;drawBook();return}
   const stale=exportStaleDays();
   const bkpBtn=$('bkpOpen');
   bkpBtn.classList.toggle('warn',stale>=EXPORT_REMIND_DAYS);
@@ -1615,6 +1678,9 @@ const $=id=>document.getElementById(id.startsWith('#')?id.slice(1):id);
 $('wPrev').onclick=()=>{weekStart=addDays(weekStart,-7);date=getOpenDate(weekStart);draw()};
 $('wNext').onclick=()=>{weekStart=addDays(weekStart,7);date=getOpenDate(weekStart);draw()};
 $('undoBtn').onclick=undo;
+$('bookBtn').onclick=()=>{if(view==='book'){view='seat'}else{view='book';bookMonth=date.slice(0,8)+'01'}draw()};
+$('bookPrev').onclick=()=>{const d=parse(bookMonth);d.setMonth(d.getMonth()-1);bookMonth=ymd(d);draw()};
+$('bookNext').onclick=()=>{const d=parse(bookMonth);d.setMonth(d.getMonth()+1);bookMonth=ymd(d);draw()};
 $('wToday').onclick=()=>{date=getOpenDate(today());weekStart=mondayOf(date);draw()};
 $('fsUp').onclick=()=>{db.fs=Math.min(24,db.fs+1);try{lastSaved=JSON.stringify(db);localStorage.setItem(KEY,lastSaved)}catch(_e){}draw()};
 $('fsDown').onclick=()=>{db.fs=Math.max(16,db.fs-1);try{lastSaved=JSON.stringify(db);localStorage.setItem(KEY,lastSaved)}catch(_e){}draw()};
@@ -2876,6 +2942,37 @@ if(location.search.includes('test=1')) (async()=>{
   check(restoredChipTimers && restoredChipTimers.querySelectorAll('.badge').length === 2, 'B3: 使用中に戻すと札が復活する');
 
   nowMs = origNowMs;
+
+  /* === バッチ4: 予約帳（月のカレンダー → その日の席の画面へ） === */
+  {
+    const bkDay=getOpenDate(addDays(today(),9));
+    const mk=(id,name,cx)=>({id,date:bkDay,kind:'res',name,tables:[],people:2,children:0,time:'',tel:'',note:'',arrived:false,gone:false,called:false,cancelled:cx,nomiStart:null,limitEnd:null});
+    db.entries.push(mk('bk-1','予約帳テスト',false),mk('bk-2','取消済',true));
+    date=getOpenDate(today());view='seat';draw();
+    $('bookBtn').click();
+    check(view==='book'&&!$('book').hidden&&$('body').hidden&&$('dates').hidden,'予約帳: 押すと月のカレンダーが出て席の画面が隠れる');
+    check($('bookGrid').querySelectorAll('.day').length===42,'予約帳: 6週分の日付が並ぶ');
+    const wed=[...$('bookGrid').querySelectorAll('.day')].find(b=>parse(b.dataset.date).getDay()===3);
+    check(wed&&wed.disabled&&wed.textContent.includes('定休日'),'予約帳: 水曜は押せず「定休日」と出る');
+    let guard=0;
+    while(!$('bookGrid').querySelector(`.day[data-date="${bkDay}"]:not(.other)`)&&guard++<3) $('bookNext').click();
+    const cell=$('bookGrid').querySelector(`.day[data-date="${bkDay}"]:not(.other)`);
+    check(cell&&cell.querySelector('.cnt').textContent==='予約 1件','予約帳: 件数は取消・終了を除いて数える');
+    cell.click();
+    check(view==='seat'&&date===bkDay&&!$('body').hidden&&$('book').hidden,'予約帳: 日付を押すとその日の席の画面へ移る');
+    const before=db.entries.length;
+    document.querySelector('.seat[data-no="9"]').click();
+    check($('dlg').open,'予約帳: 移った先で席をタップすると予約の入力が開く');
+    $('frm').name.value='予約帳から作成';
+    $('frm').querySelector('button[value="ok"]').click();
+    const made=db.entries.find(e=>e.name==='予約帳から作成');
+    check(db.entries.length===before+1&&made&&made.date===bkDay&&made.tables.includes('9')&&!made.arrived,'予約帳: 移った先で今の運用どおり予約が1件でき、使用中にはならない');
+    $('bookBtn').click();
+    check($('bookBtn').textContent==='席へ戻る','予約帳: 開いている間はボタンが「席へ戻る」になる');
+    $('bookBtn').click();
+    check(view==='seat'&&$('bookBtn').textContent==='予約帳'&&!$('dates').hidden,'予約帳: 「席へ戻る」で席の画面に戻る');
+    db.entries=db.entries.filter(e=>!['bk-1','bk-2'].includes(e.id)&&e.name!=='予約帳から作成');
+  }
 
   db=JSON.parse(bk);date=oldDate;weekStart=oldWeekStart;save();draw();
   window.alert=_origAlert;
