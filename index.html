@@ -115,6 +115,17 @@ header h1{font-size:1em;margin:0 .4em 0 0;font-weight:700;letter-spacing:.22em}
 .badge.late{background:#e5483b;color:#fff}
 @keyframes late-blink{0%,100%{background:var(--sumi-lit)}50%{background:#7a1f19}}
 @media (prefers-reduced-motion:reduce){.chip.late,.item.late{animation:none;background:#7a1f19}}
+.chip-timers{display:flex;flex-wrap:wrap;gap:2px;align-items:center;margin-top:2px}
+.chip-timers .badge{font-size:clamp(.6em,11cqw,.75em);padding:.1em .3em;border-radius:3px;max-width:100%;white-space:normal;overflow-wrap:anywhere;line-height:1.15}  /* 狭いカウンターでも「ラストオーダー」を切らずに折り返す */
+.chip.timer-warn{background:color-mix(in srgb,var(--karashi) 30%,var(--sumi-lit))!important;outline:2px solid var(--karashi);outline-offset:-2px}
+.chip.timer-alert{outline:3px solid #ff5a4e;outline-offset:-3px;animation:chip-timer-blink 1.2s ease-in-out infinite}
+@keyframes chip-timer-blink{0%,100%{background:#5a1410}50%{background:#a3221a}}
+@media (prefers-reduced-motion:reduce){.chip.timer-alert{animation:none;background:#7a1a14}}
+.badge.nomi-normal,.badge.limit-normal{background:rgba(255,255,255,.18);color:var(--kinari)}
+.badge.nomi-warn,.badge.limit-warn{background:var(--karashi);color:var(--sumi);font-weight:700}
+.badge.nomi-alert,.badge.limit-alert{background:#8a1c14;color:#fff;font-weight:700;animation:timer-blink 1.2s ease-in-out infinite}
+@keyframes timer-blink{0%,100%{background:#8a1c14}50%{background:#b3261e}}
+@media (prefers-reduced-motion:reduce){.badge.nomi-alert,.badge.limit-alert{animation:none;background:#8a1c14}}
 .chip.solo .chip-name{font-size:clamp(1em,22cqw,1.75em);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}  /* 1件なら縦に余裕がある。最大2行 */
 .chip.solo .chip-meta{flex-direction:row;gap:.5em;font-size:clamp(.85em,13cqw,1.2em);margin-top:.15em}
 .chip.solo .chip-time{order:-1}
@@ -190,6 +201,14 @@ form.f .message{grid-column:1/-1;margin:0;color:var(--enji-label);font-size:.85e
 #actBtns button{min-height:56px;font-size:1.1em;padding:.5em 1em;border-radius:10px}
 #actBtns button.btn-cancel-act{margin-top:16px;border:1px dashed var(--enji-label);color:var(--enji-label);background:transparent}
 #actBtns button.btn-cancel-act:active{background:rgba(217,138,146,.15)}
+#actTimers{margin-top:.6em;padding-top:.6em;border-top:1px solid var(--ash);display:flex;flex-direction:column;gap:.5em;font-size:.9em}
+#actTimers .timer-sec{display:flex;flex-direction:column;gap:.3em}
+#actTimers .timer-lab{color:var(--kinari);opacity:.85;font-size:.85em}
+#actTimers .timer-row{display:flex;gap:4px;flex-wrap:wrap}
+#actTimers button{min-height:38px;font-size:.95em;padding:.3em .6em;border-radius:6px;border:1px solid var(--ash);background:var(--sumi);color:var(--kinari)}
+#actTimers button:active{background:var(--ash)}
+#actTimers button.cancel{color:var(--enji-label);border-color:var(--enji-label)}
+#actTimers .timer-custom-row{display:flex;gap:4px;align-items:center;margin-top:2px}
 </style>
 </head>
 <body>
@@ -248,6 +267,7 @@ form.f .message{grid-column:1/-1;margin:0;color:var(--enji-label);font-size:.85e
   <h3 id="actTitle"></h3>
   <div id="actState" style="grid-column:1/-1;font-size:.9em;color:var(--kinari-muted);margin:-.2em 0 .4em"></div>
   <div id="actBtns" style="display:flex;flex-direction:column;gap:.5em;width:100%;grid-column:1/-1"></div>
+  <div id="actTimers" style="grid-column:1/-1;width:100%"></div>
 </form></dialog>
 <dialog id="editDlg"><form class="f" method="dialog" id="editFrm" autocomplete="off"></form></dialog>
 <dialog id="askDlg"><form class="f" method="dialog" id="askFrm">
@@ -302,6 +322,14 @@ function normalizeDb(d){
       e.time = typeof e.time === 'string' ? e.time : '';
       e.note = typeof e.note === 'string' ? e.note : '';
       e.people = (typeof e.people === 'number' && !isNaN(e.people)) ? e.people : null;
+      if(e.people === null){
+        e.children = 0;
+      } else {
+        const c = (typeof e.children === 'number' && Number.isInteger(e.children)) ? e.children : 0;
+        e.children = (c >= 1 && c <= e.people) ? c : 0;
+      }
+      e.nomiStart = (typeof e.nomiStart === 'number' && Number.isFinite(e.nomiStart)) ? e.nomiStart : null;
+      e.limitEnd = (typeof e.limitEnd === 'number' && Number.isFinite(e.limitEnd)) ? e.limitEnd : null;
       e.tables = Array.isArray(e.tables) ? [...new Set(e.tables.map(String))] : [];
       e.arrived = Boolean(e.arrived);
       e.gone = Boolean(e.gone);
@@ -319,6 +347,12 @@ function normalizeDb(d){
   }
   const fs = (typeof d.fs === 'number' && !isNaN(d.fs)) ? Math.max(16, Math.min(24, d.fs)) : 19;
   return {...d, entries, extra, occ, fs};
+}
+
+function peopleText(e){
+  if(!e || e.people === null || e.people === undefined) return '人数未定';
+  const c = e.children || 0;
+  return c > 0 ? `${e.people}名(子${c})` : `${e.people}名`;
 }
 
 /* ---------- 保存 ---------- */
@@ -495,10 +529,51 @@ const WD=['日','月','火','水','木','金','土'];
 let date=getOpenDate(today()), weekStart=mondayOf(date);
 
 let nowHM=()=>{const d=new Date();return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')};
+let nowMs=()=>Date.now();
+const NOMI_MIN=90;
+const NOMI_WARN_MIN=15;
+
+function getNomiInfo(e){
+  if(!e.nomiStart) return null;
+  const elapsedMs = nowMs() - e.nomiStart;
+  const elapsedMin = Math.floor(elapsedMs / 60000);
+  if(elapsedMin >= NOMI_MIN){
+    return {stage: 3, cls: 'badge nomi-alert', text: 'ラストオーダー'};
+  } else if(elapsedMin >= NOMI_MIN - NOMI_WARN_MIN){
+    return {stage: 2, cls: 'badge nomi-warn', text: 'まもなくラストオーダー'};
+  } else {
+    const remMin = Math.max(0, NOMI_MIN - elapsedMin);
+    return {stage: 1, cls: 'badge nomi-normal', text: `飲み放題 あと${remMin}分`};
+  }
+}
+
+function getLimitInfo(e){
+  if(!e.limitEnd) return null;
+  const remMs = e.limitEnd - nowMs();
+  if(remMs <= 0){
+    return {stage: 3, cls: 'badge limit-alert', text: '時間です'};
+  } else if(remMs <= 5 * 60 * 1000){
+    const remMin = Math.max(1, Math.ceil(remMs / 60000));
+    return {stage: 2, cls: 'badge limit-warn', text: `あと${remMin}分`};
+  } else {
+    const remMin = Math.ceil(remMs / 60000);
+    return {stage: 1, cls: 'badge limit-normal', text: `あと${remMin}分`};
+  }
+}
+
 // 今日で、時間が決まっていて、その時間を過ぎても来店していない通常予約
 const isLate=e=>e.date===today()&&e.kind!=='wait'&&!!e.time&&!e.arrived&&!e.cancelled&&!e.gone&&e.time<nowHM();
 const lateSig=()=>db.entries.filter(isLate).map(e=>e.id).join();
 let lastLateSig='';
+const timerSig=()=>db.entries
+  .filter(e=>e.arrived&&!e.gone&&!e.cancelled&&(e.nomiStart||e.limitEnd))
+  .map(e=>{
+    const p=[e.id];
+    if(e.nomiStart){const n=getNomiInfo(e);if(n)p.push(`n:${n.stage}:${n.text}`)}
+    if(e.limitEnd){const l=getLimitInfo(e);if(l)p.push(`l:${l.stage}:${l.text}`)}
+    return p.join('|');
+  }).join(';');
+let lastTimerSig='';
 function checkDayChange(){
   const nowToday=today();
   if(nowToday!==lastToday){
@@ -515,7 +590,15 @@ function checkDayChange(){
 }
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)checkDayChange()});
 setInterval(checkDayChange,60000);
-setInterval(()=>{const g=lateSig();if(g!==lastLateSig){lastLateSig=g;draw()}},30000);
+setInterval(()=>{
+  if(typeof drag !== 'undefined' && drag) return;
+  const g=lateSig(), t=timerSig();
+  if(g!==lastLateSig || t!==lastTimerSig){
+    lastLateSig=g;
+    lastTimerSig=t;
+    draw();
+  }
+},30000);
 
 /* ---------- 席 ---------- */
 const ROWS=[
@@ -561,7 +644,7 @@ function itemEl(e){
   div.className='item'+(isWait?' wait':'');
   div.dataset.entryId=e.id;
   div.style.borderLeftColor=isWait?'var(--karashi)':color(e.id);
-  const meta=[e.time||'時間未定', e.people?e.people+'名':'人数未定', e.tel].filter(Boolean).join(' / ');
+  const meta=[e.time||'時間未定', peopleText(e), e.tel].filter(Boolean).join(' / ');
   div.innerHTML=`<div class="l1"><span class="nm"></span><span class="mt"></span></div>
     <div class="tbl"></div><div class="note mt"></div><div class="acts"></div>`;
   const nmEl=div.querySelector('.nm');
@@ -627,9 +710,10 @@ function drawLists(){
     vanished.forEach(e=>{
       const d=document.createElement('div');
       d.className='item';
+      d.dataset.entryId=e.id;
       d.style.borderLeftColor='#aaa';
       const st=e.cancelled?'取消':'終了';
-      const meta=[e.time||'時間未定', e.people?e.people+'名':'人数未定', st].filter(Boolean).join(' / ');
+      const meta=[e.time||'時間未定', peopleText(e), st].filter(Boolean).join(' / ');
       const tblStr=e.tables&&e.tables.length?'卓 '+e.tables.join(', '):'卓未定';
       d.innerHTML=`<div class="l1"><span class="nm"></span><span class="mt"></span></div>
         <div class="tbl"></div><div class="acts"></div>`;
@@ -682,7 +766,7 @@ function openMoreDlg(entries,no){
   entries.forEach(e=>{
     const b=document.createElement('button');
     b.type='button';
-    const meta=[e.time||'時間未定', e.people?e.people+'名':'人数未定'].filter(Boolean).join(' / ');
+    const meta=[e.time||'時間未定', peopleText(e)].filter(Boolean).join(' / ');
     b.textContent=`${e.name}（${meta}）`;
     b.onclick=()=>{dlg.close();openActDlg(e,no)};
     box.appendChild(b);
@@ -743,10 +827,41 @@ function seatEl(no){
         c.querySelector('.chip-name').before(wb);
       }
       c.querySelector('.chip-name').textContent=e.name;
-      c.querySelector('.chip-people').textContent=e.people?e.people+'名':'人数未定';
+      c.querySelector('.chip-people').textContent=peopleText(e);
       if(e.time){const time=document.createElement('span');time.className='chip-time';time.textContent=e.time;c.querySelector('.chip-meta').appendChild(time)}
       const note1=(e.note||'').split('\n')[0].trim();
       if(note1){const n=document.createElement('div');n.className='chip-note';n.textContent=note1;c.appendChild(n)}
+      if(e.arrived && !e.gone && !e.cancelled){
+        // 1〜2m離れても気づけるよう、黄・赤の段階ではチップ全体も色を変える（札の文字も必ず出す）
+        const st=Math.max(getNomiInfo(e)?.stage||0,getLimitInfo(e)?.stage||0);
+        if(st===2) c.classList.add('timer-warn');
+        if(st===3) c.classList.add('timer-alert');
+      }
+      if(e.arrived && !e.gone && !e.cancelled && (e.nomiStart || e.limitEnd)){
+        const timersDiv=document.createElement('div');
+        timersDiv.className='chip-timers';
+        if(e.nomiStart){
+          const ni=getNomiInfo(e);
+          if(ni){
+            const nb=document.createElement('span');
+            nb.className=ni.cls;
+            nb.textContent=ni.text;
+            timersDiv.appendChild(nb);
+          }
+        }
+        if(e.limitEnd){
+          const li=getLimitInfo(e);
+          if(li){
+            const lb=document.createElement('span');
+            lb.className=li.cls;
+            lb.textContent=li.text;
+            timersDiv.appendChild(lb);
+          }
+        }
+        if(timersDiv.hasChildNodes()){
+          c.appendChild(timersDiv);
+        }
+      }
       c.dataset.entryId=e.id;c.dataset.from=no;
       c.setAttribute('aria-label',`${e.name} を卓または保留へドラッグ`);
       bindDrag(c,{type:'move',entryId:e.id,from:no},e.name);
@@ -902,12 +1017,13 @@ function delExtra(no){
 
 /* ---------- 状態ダイアログ (#actDlg) ---------- */
 function openActDlg(e,no){
-  const dlg=$('actDlg'), title=$('actTitle'), stateEl=$('actState'), box=$('actBtns');
+  const dlg=$('actDlg'), title=$('actTitle'), stateEl=$('actState'), box=$('actBtns'), timersEl=$('actTimers');
   const nTbl=e.tables.length;
   const tblStr=e.tables.join('・')||String(no);
   title.textContent=`${e.name}（卓 ${tblStr}）`; // 25.1: textContent で挿入
   stateEl.textContent=`いま：${e.arrived ? '使用中' : 'まだ来店していない予約'}`;
   box.replaceChildren();
+  if(timersEl) timersEl.replaceChildren();
   const isToday=date===today();
   const addBtn=(label,cls,fn)=>{
     const b=document.createElement('button');
@@ -927,6 +1043,85 @@ function openActDlg(e,no){
   addBtn('編集','',()=>{openEdit(e,no)});
   addBtn('予約を取り消す','btn-cancel-act',()=>cancelEntry(e));
   addBtn('閉じる','',()=>{});
+
+  if(e.arrived && timersEl){
+    const secNomi=document.createElement('div');
+    secNomi.className='timer-sec';
+    if(!e.nomiStart){
+      const b=document.createElement('button');
+      b.type='button';
+      b.id='btnNomiStart';
+      b.textContent='飲み放題を始める（90分）';
+      b.onclick=()=>{dlg.close();e.nomiStart=nowMs();save();draw()};
+      secNomi.appendChild(b);
+    } else {
+      const b=document.createElement('button');
+      b.type='button';
+      b.id='btnNomiCancel';
+      b.className='cancel';
+      b.textContent='飲み放題を取り消す';
+      b.onclick=()=>{dlg.close();e.nomiStart=null;save();draw()};
+      secNomi.appendChild(b);
+    }
+    timersEl.appendChild(secNomi);
+
+    const secLimit=document.createElement('div');
+    secLimit.className='timer-sec';
+    if(!e.limitEnd){
+      const lab=document.createElement('div');
+      lab.className='timer-lab';
+      lab.textContent='あと何分で席を空けるか';
+      secLimit.appendChild(lab);
+
+      const row=document.createElement('div');
+      row.className='timer-row';
+      [10,15,20,30].forEach(m=>{
+        const b=document.createElement('button');
+        b.type='button';
+        b.className='btn-limit-m';
+        b.textContent=`${m}分`;
+        b.onclick=()=>{dlg.close();e.limitEnd=nowMs()+m*60*1000;save();draw()};
+        row.appendChild(b);
+      });
+      const otherBtn=document.createElement('button');
+      otherBtn.type='button';
+      otherBtn.id='btnLimitOther';
+      otherBtn.textContent='ほか';
+      row.appendChild(otherBtn);
+      secLimit.appendChild(row);
+
+      const customRow=document.createElement('div');
+      customRow.className='timer-custom-row';
+      customRow.style.display='none';
+      customRow.innerHTML=`<input type="number" name="limitCustom" min="1" max="300" style="width:4.5em" placeholder="分"><button type="button" id="btnLimitCustomOk" style="min-height:34px">決定</button>`;
+      const customInput=customRow.querySelector('input');
+      const customOk=customRow.querySelector('#btnLimitCustomOk');
+      otherBtn.onclick=()=>{
+        customRow.style.display='flex';
+        customInput.focus();
+      };
+      customOk.onclick=()=>{
+        const val=parseInt(customInput.value,10);
+        if(val>0){
+          dlg.close();
+          e.limitEnd=nowMs()+val*60*1000;
+          save();
+          draw();
+        }
+      };
+      secLimit.appendChild(customRow);
+    } else {
+      const b=document.createElement('button');
+      b.type='button';
+      b.id='btnLimitCancel';
+      b.className='cancel';
+      b.textContent='時間の指定を取り消す';
+      b.onclick=()=>{dlg.close();e.limitEnd=null;save();draw()};
+      secLimit.appendChild(b);
+    }
+    timersEl.appendChild(secLimit);
+  }
+
   dlg.showModal();
 }
 
@@ -1001,6 +1196,28 @@ function dragFromTo(source,target){
 const TIMES=(()=>{const a=[];for(let h=17;h<=21;h++)for(const m of['00','30'])a.push(h+':'+m);return a})();
 const PEOPLE_MAX=50;
 
+// 子供の人数: 大人と同じボタン式（0が既定。触らなければ今まで通り）。5人以上は数字欄
+function createChildPicker(syncInput){
+  const wrap=document.createElement('div');wrap.className='btn-group';
+  const cur=Number(syncInput.value)||0;
+  const more=document.createElement('input');
+  more.type='number';more.min='5';more.max='99';more.autocomplete='off';more.placeholder='人数';
+  more.style.cssText='width:4.5em;display:'+(cur>=5?'inline-block':'none');
+  if(cur>=5) more.value=cur;
+  const btns=['0','1','2','3','4','5以上'].map((t,i)=>{
+    const b=document.createElement('button');b.type='button';b.textContent=t;
+    b.className='p-btn'+((i<5?cur===i:cur>=5)?' on':'');
+    b.onclick=()=>{
+      btns.forEach(x=>x.classList.remove('on'));b.classList.add('on');
+      if(i<5){more.style.display='none';syncInput.value=String(i)}
+      else{more.style.display='inline-block';more.focus();syncInput.value=more.value||'5'}
+    };
+    wrap.appendChild(b);return b;
+  });
+  more.oninput=()=>{syncInput.value=more.value||'5'};
+  wrap.appendChild(more);
+  return wrap;
+}
 function createPeoplePicker(initialVal, syncInput){
   const wrap=document.createElement('div');
   wrap.className='btn-group';
@@ -1179,7 +1396,8 @@ function openForm(kind,e,forDate,seatNo){
 
   f.innerHTML=`<h3>${title}</h3>
    <label id="nameLbl">${nameLabelText}</label><input name="name" ${nameRequired?'required':''} autofocus autocomplete="off" autocorrect="off" spellcheck="false" ${isSeat&&isToday?'placeholder="空欄で「来店客」として使用中"':''}>
-   <label>人数</label><div id="fPeoplePicker"></div><input type="hidden" name="people" autocomplete="off">
+   <label>大人</label><div id="fPeoplePicker"></div><input type="hidden" name="people" autocomplete="off">
+   <label>子供</label><div class="childPicker"></div><input type="hidden" name="children" value="${e?.children||0}" autocomplete="off">
    <label>時間</label><div id="fTimePicker"></div><input type="hidden" name="time" autocomplete="off">
    ${isSeat?'':'<label>電話待ち</label><input type="checkbox" name="wait" autocomplete="off" style="width:auto;justify-self:start" '+(isWaitInitial?'checked':'')+'>'}
    <label>電話番号<span class="tel-req" ${isWaitInitial?'':'hidden'}>*</span></label><input name="tel" type="tel" inputmode="tel" autocomplete="off" ${isWaitInitial?'required':''}>
@@ -1202,8 +1420,10 @@ function openForm(kind,e,forDate,seatNo){
     }
   };
 
-  const peoplePick = createPeoplePicker(e?.people, f.people);
+  const adultInit = (e && e.people !== null && e.people !== undefined) ? Math.max(0, e.people - (e.children || 0)) : null;
+  const peoplePick = createPeoplePicker(adultInit, f.people);
   f.querySelector('#fPeoplePicker').appendChild(peoplePick.el);
+  f.querySelector('.childPicker').appendChild(createChildPicker(f.children));
   const timePick = createTimePicker(e?.time, f.time);
   f.querySelector('#fTimePicker').appendChild(timePick.el);
 
@@ -1277,8 +1497,20 @@ function openForm(kind,e,forDate,seatNo){
         }
       }
 
+      const adultVal=peoplePick.getValue();
+      const childRaw=parseInt(f.children?f.children.value:'0',10);
+      const childVal=isNaN(childRaw)||childRaw<0?0:childRaw;
+      if(adultVal===null&&childVal>0){
+        ev.preventDefault();
+        const msg=f.querySelector('.message');
+        if(msg){msg.hidden=false;msg.textContent='大人の人数を入れてください';}
+        return;
+      }
+      const finalPeople=adultVal!==null?(adultVal+childVal):null;
+      const finalChildren=adultVal!==null?childVal:0;
+
       // 全検査が通ってから代入（F5）
-      const o=e||{id:uid(),date:targetD,kind:chosenKind,tables:[],arrived:false,gone:false,called:false,cancelled:false};
+      const o=e||{id:uid(),date:targetD,kind:chosenKind,tables:[],nomiStart:null,limitEnd:null,arrived:false,gone:false,called:false,cancelled:false};
       if(chosenKind==='wait' && (!e || e.kind!=='wait')){
         o.called=false;
       }
@@ -1287,7 +1519,8 @@ function openForm(kind,e,forDate,seatNo){
       o.name=nameVal;
       o.tel=f.tel.value.trim();
       o.time=timePick.getValue();
-      o.people=peoplePick.getValue();
+      o.people=finalPeople;
+      o.children=finalChildren;
       o.note=f.note.value.trim();
 
       if(isSeat){
@@ -1315,7 +1548,8 @@ function openEdit(e,no){
   const f=document.getElementById('editFrm'), dlg=document.getElementById('editDlg');
   f.innerHTML=`<h3></h3>
    <label>名前</label><input name="name" required autocomplete="off" autocorrect="off" spellcheck="false">
-   <label>人数</label><div id="editPeoplePicker"></div><input type="hidden" name="people" autocomplete="off">
+   <label>大人</label><div id="editPeoplePicker"></div><input type="hidden" name="people" autocomplete="off">
+   <label>子供</label><div class="childPicker"></div><input type="hidden" name="children" value="${e?.children||0}" autocomplete="off">
    <label>時間</label><div id="editTimePicker"></div><input type="hidden" name="time" autocomplete="off">
    <label>電話番号</label><input name="tel" type="tel" inputmode="tel" autocomplete="off">
    <label>要望</label><textarea name="note" rows="2" autocomplete="off" autocorrect="off" spellcheck="false"></textarea>
@@ -1329,8 +1563,10 @@ function openEdit(e,no){
    </div>`;
   f.querySelector('h3').textContent=`${e.name}（卓 ${no}）`;
 
-  const peoplePick = createPeoplePicker(e?.people, f.people);
+  const adultInit = (e && e.people !== null && e.people !== undefined) ? Math.max(0, e.people - (e.children || 0)) : null;
+  const peoplePick = createPeoplePicker(adultInit, f.people);
   f.querySelector('#editPeoplePicker').appendChild(peoplePick.el);
+  f.querySelector('.childPicker').appendChild(createChildPicker(f.children));
   const timePick = createTimePicker(e?.time, f.time);
   f.querySelector('#editTimePicker').appendChild(timePick.el);
 
@@ -1343,6 +1579,17 @@ function openEdit(e,no){
     if(action==='close') return;
     if(action==='save'){
       if(!f.reportValidity()){ev.preventDefault();return}
+      const adultVal=peoplePick.getValue();
+      const childRaw=parseInt(f.children?f.children.value:'0',10);
+      const childVal=isNaN(childRaw)||childRaw<0?0:childRaw;
+      if(adultVal===null&&childVal>0){
+        ev.preventDefault();
+        message.hidden=false;
+        message.textContent='大人の人数を入れてください';
+        return;
+      }
+      const finalPeople=adultVal!==null?(adultVal+childVal):null;
+      const finalChildren=adultVal!==null?childVal:0;
       const rawTbl=normalizeDigits(f.tables ? f.tables.value : '');
       const tables=rawTbl?rawTbl.split(/[、,・\s]+/).filter(Boolean):[];
       if(tables.length===0){
@@ -1353,7 +1600,8 @@ function openEdit(e,no){
         }
       }
       for(const k of['name','tel','note']) e[k]=f[k].value.trim();
-      e.people=peoplePick.getValue();
+      e.people=finalPeople;
+      e.children=finalChildren;
       e.time=timePick.getValue();
     } else if(action==='release') unassign(e);
     else if(action==='cancel'){cancelEntry(e);return}
@@ -1460,6 +1708,7 @@ function seedDemo(){
     {id:'demo-g',date:today(),kind:'res',name:'渡辺様',tel:'',time:'21:00',people:3,note:'',tables:['8'],arrived:false,gone:false,called:false,cancelled:false},
     {id:'demo-e',date:later,kind:'res',name:'高橋様',tel:'',time:'19:00',people:6,note:'',tables:['17'],arrived:false,gone:false,called:false,cancelled:false},
     {id:'demo-f',date:tomorrow,kind:'res',name:'伊藤様',tel:'',time:'',people:null,note:'',tables:[],arrived:false,gone:false,called:false,cancelled:false},
+    {id:'demo-h',date:today(),kind:'res',name:'木村様',tel:'',time:'17:30',people:4,children:1,note:'座敷希望',tables:['18'],arrived:false,gone:false,called:false,cancelled:false},
   );
   db.occ[today()]=['1','2','3'];save();
 }
@@ -1489,7 +1738,7 @@ if(location.search.includes('test=1')) (async()=>{
   let checks=0;
   const check=(ok,label)=>{console.assert(ok,label);if(!ok)throw new Error(`自己チェック失敗: ${label}`);checks++};
   try{
-    const entry=(id,name,tables=[])=>({id,date:today(),kind:'res',name,tables,people:null,time:'',tel:'',note:'',arrived:false,gone:false,called:false,cancelled:false});
+    const entry=(id,name,tables=[])=>({id,date:today(),kind:'res',name,tables,people:null,children:0,nomiStart:null,limitEnd:null,time:'',tel:'',note:'',arrived:false,gone:false,called:false,cancelled:false});
     db={entries:[],extra:[],occ:{},fs:17}; date=today();
 
   /* === 27章 完了条件1: 削った要素がDOMに無い === */
@@ -2435,6 +2684,198 @@ if(location.search.includes('test=1')) (async()=>{
   const editTblInput = $('editFrm').querySelector('input[name="tables"]');
   check(!editTblInput.hasAttribute('inputmode'), 'F18: openEditの卓欄にinputmode属性が無い');
   $('editDlg').close();
+
+  /* ==============================================================
+     バッチ2: 大人・子供の人数テスト
+     ============================================================== */
+  /* B2-1: peopleText 関数 */
+  check(peopleText({people:4, children:0}) === '4名', 'B2: 子供0なら「4名」');
+  check(peopleText({people:4, children:1}) === '4名(子1)', 'B2: 子供1なら「4名(子1)」');
+  check(peopleText({people:null, children:0}) === '人数未定', 'B2: 人数なしは「人数未定」');
+
+  /* B2-2: normalizeDb の children 丸め */
+  const b2OldData = normalizeDb({entries:[{date:today(), people:4}]});
+  check(b2OldData.entries[0].children === 0, 'B2: childrenの無い古いデータは0');
+  const b2Overflow = normalizeDb({entries:[{date:today(), people:3, children:5}]});
+  check(b2Overflow.entries[0].children === 0, 'B2: 子供が合計を超えるデータは0に丸める');
+  const b2NoPeople = normalizeDb({entries:[{date:today(), people:null, children:2}]});
+  check(b2NoPeople.entries[0].children === 0, 'B2: peopleがnullなら子供は0');
+
+  /* B2-3: 入力画面で大人3・子供1を入れて保存（本番クリック経路） */
+  date = getOpenDate(today()); draw();
+  const b2Seat = '14';
+  document.querySelector(`.seat[data-no="${b2Seat}"]`).click();
+  check($('dlg').open, 'B2: 卓14クリックで予約ダイアログが開く');
+  $('frm').name.value = '山田家族';
+  const b2Adult3Btn = [...$('frm').querySelectorAll('.p-btn')].find(b => b.textContent === '3');
+  b2Adult3Btn.click();
+  const b2ChildInput = $('frm').querySelector('input[name="children"]');
+  b2ChildInput.value = '1';
+  $('frm').querySelector('#frmSaveBtn').click();
+  const b2Entry = db.entries.find(e => e.name === '山田家族');
+  check(b2Entry && b2Entry.people === 4 && b2Entry.children === 1, 'B2: 大人3・子供1で保存するとpeople=4, children=1');
+  draw();
+  const b2Chip = document.querySelector(`.seat[data-no="${b2Seat}"] .chip[data-entry-id="${b2Entry.id}"]`);
+  check(b2Chip && b2Chip.querySelector('.chip-people')?.textContent === '4名(子1)', 'B2: チップに「4名(子1)」と表示される');
+
+  /* B2-4: 大人未入力で子供1は保存されない（「大人の人数を入れてください」） */
+  $('addRes').click();
+  check($('dlg').open, 'B2: 卓未定の「＋予約」でダイアログが開く');
+  $('frm').name.value = '大人なし客';
+  // 大人は初期値「未定」のまま
+  $('frm').querySelector('input[name="children"]').value = '1';
+  $('frm').querySelector('#frmSaveBtn').click();
+  const b2Msg = $('frm').querySelector('.message');
+  check($('dlg').open && !b2Msg.hidden && b2Msg.textContent === '大人の人数を入れてください', 'B2: 大人未入力で子供1は保存されずメッセージ表示');
+  check(!db.entries.some(e => e.name === '大人なし客'), 'B2: 大人なし客はDBに保存されていない');
+  $('frm').querySelector('button[value="cancel"]').click();
+
+  /* B2-5: 子供を20人入れても保存できる */
+  const b2Seat15 = '15';
+  document.querySelector(`.seat[data-no="${b2Seat15}"]`).click();
+  $('frm').name.value = '団体客';
+  [...$('frm').querySelectorAll('.p-btn')].find(b => b.textContent === '3').click();
+  $('frm').querySelector('input[name="children"]').value = '20';
+  $('frm').querySelector('#frmSaveBtn').click();
+  const b2LargeEntry = db.entries.find(e => e.name === '団体客');
+  check(b2LargeEntry && b2LargeEntry.people === 23 && b2LargeEntry.children === 20, 'B2: 子供20人でも保存できる(people=23, children=20)');
+  draw();
+  const b2LargeChip = document.querySelector(`.seat[data-no="${b2Seat15}"] .chip[data-entry-id="${b2LargeEntry.id}"]`);
+  check(b2LargeChip && b2LargeChip.querySelector('.chip-people')?.textContent === '23名(子20)', 'B2: チップに「23名(子20)」と表示される');
+
+  /* B2-6: 編集で開き直すと大人3・子供1が復元される */
+  b2Chip.click();
+  check($('actDlg').open, 'B2: チップクリックで状態ダイアログが開く');
+  [...$('#actBtns').querySelectorAll('button')].find(b => b.textContent === '編集').click();
+  check($('editDlg').open, 'B2: 編集ボタンクリックで編集ダイアログが開く');
+  const editAdult3Btn = [...$('editFrm').querySelectorAll('.p-btn')].find(b => b.textContent === '3');
+  check(editAdult3Btn && editAdult3Btn.classList.contains('on'), 'B2: 編集で大人の人数3が復元されている');
+  check($('editFrm').querySelector('input[name="children"]')?.value === '1', 'B2: 編集で子供の人数1が復元されている');
+  $('editFrm').querySelector('button[value="close"]').click();
+
+  /* ==============================================================
+     バッチ3: 飲み放題とタイマーテスト
+     ============================================================== */
+  /* B3-1: normalizeDb で壊れた値が null になる */
+  const b3Broken = normalizeDb({entries:[{date:today(), nomiStart:'invalid', limitEnd:NaN}]});
+  check(b3Broken.entries[0].nomiStart === null && b3Broken.entries[0].limitEnd === null, 'B3: normalizeDbで数値以外はnullになる');
+
+  /* B3-2: 使用中でない予約にボタン無し */
+  b2Chip.click();
+  check($('actDlg').open, 'B3: 未使用中チップクリックで状態ダイアログが開く');
+  const b3TimersBox = $('actTimers');
+  check(!b3TimersBox || !b3TimersBox.querySelector('#btnNomiStart'), 'B3: 使用中でない予約に飲み放題ボタンは出ない');
+  check(!b3TimersBox || !b3TimersBox.querySelector('.btn-limit-m'), 'B3: 使用中でない予約に利用時間ボタンは出ない');
+  $('actDlg').close();
+
+  /* B3-3: 1タップで nomiStart が入る */
+  b2Chip.click();
+  [...$('#actBtns').querySelectorAll('button')].find(b => b.textContent === '使用中にする').click();
+  check(b2Entry.arrived, 'B3: 山田家族を使用中にした');
+  draw();
+  const b2ArrivedChip = document.querySelector(`.seat[data-no="${b2Seat}"] .chip[data-entry-id="${b2Entry.id}"]`);
+  b2ArrivedChip.click();
+  check($('actDlg').open, 'B3: 使用中チップクリックで状態ダイアログが開く');
+  const testStartTime = 1700000000000;
+  const origNowMs = nowMs;
+  nowMs = () => testStartTime;
+  const btnNomi = $('actTimers').querySelector('#btnNomiStart');
+  check(!!btnNomi, 'B3: 使用中の状態画面に飲み放題開始ボタンが出る');
+  btnNomi.click();
+  check(!$('actDlg').open, 'B3: 飲み放題開始ボタンを押すと画面が閉じて盤面へ戻る');
+  check(b2Entry.nomiStart === testStartTime, 'B3: 1タップでnomiStartに開始時刻が入る');
+
+  /* B3-4: 飲み放題 札の文言・段階（74分で段階1・75分で黄＋文言・90分で赤＋「ラストオーダー」） */
+  draw();
+  let nomiBadge = document.querySelector(`.seat[data-no="${b2Seat}"] .chip[data-entry-id="${b2Entry.id}"] .badge.nomi-normal`);
+  check(nomiBadge && nomiBadge.textContent === '飲み放題 あと90分', 'B3: 0分経過で「飲み放題 あと90分」');
+
+  nowMs = () => testStartTime + 74 * 60 * 1000;
+  draw();
+  nomiBadge = document.querySelector(`.seat[data-no="${b2Seat}"] .chip[data-entry-id="${b2Entry.id}"] .badge.nomi-normal`);
+  check(nomiBadge && nomiBadge.textContent === '飲み放題 あと16分', 'B3: 74分経過で段階1「飲み放題 あと16分」');
+
+  nowMs = () => testStartTime + 75 * 60 * 1000;
+  draw();
+  const nomiWarnBadge = document.querySelector(`.seat[data-no="${b2Seat}"] .chip[data-entry-id="${b2Entry.id}"] .badge.nomi-warn`);
+  check(nomiWarnBadge && nomiWarnBadge.textContent === 'まもなくラストオーダー', 'B3: 75分経過で黄＋「まもなくラストオーダー」');
+
+  nowMs = () => testStartTime + 90 * 60 * 1000;
+  draw();
+  const nomiAlertBadge = document.querySelector(`.seat[data-no="${b2Seat}"] .chip[data-entry-id="${b2Entry.id}"] .badge.nomi-alert`);
+  check(nomiAlertBadge && nomiAlertBadge.textContent === 'ラストオーダー', 'B3: 90分経過で赤点滅＋「ラストオーダー」');
+
+  /* B3-5: 取消で消える */
+  document.querySelector(`.seat[data-no="${b2Seat}"] .chip[data-entry-id="${b2Entry.id}"]`).click();
+  const btnNomiCancel = $('actTimers').querySelector('#btnNomiCancel');
+  check(!!btnNomiCancel, 'B3: 開始済みなら「飲み放題を取り消す」ボタンに変わる');
+  btnNomiCancel.click();
+  check(b2Entry.nomiStart === null, 'B3: 取消でnomiStartがnullになる');
+  draw();
+  check(!document.querySelector(`.seat[data-no="${b2Seat}"] .chip[data-entry-id="${b2Entry.id}"] .badge[class*="nomi"]`), 'B3: 取消で飲み放題の札が消える');
+
+  /* B3-6: 利用時間ボタン1タップで limitEnd（10分） */
+  document.querySelector(`.seat[data-no="${b2Seat}"] .chip[data-entry-id="${b2Entry.id}"]`).click();
+  nowMs = () => testStartTime;
+  const btn10m = [...$('actTimers').querySelectorAll('.btn-limit-m')].find(b => b.textContent === '10分');
+  check(!!btn10m, 'B3: 10分ボタンが存在する');
+  btn10m.click();
+  check(!$('actDlg').open, 'B3: 10分ボタンを押すと画面が閉じて盤面へ戻る');
+  check(b2Entry.limitEnd === testStartTime + 10 * 60 * 1000, 'B3: 1タップでlimitEnd=今+10分が入る');
+
+  /* B3-7: 残り5分で黄・0分で赤 */
+  draw();
+  let limitBadge = document.querySelector(`.seat[data-no="${b2Seat}"] .chip[data-entry-id="${b2Entry.id}"] .badge.limit-normal`);
+  check(limitBadge && limitBadge.textContent === 'あと10分', 'B3: 開始直後は「あと10分」');
+
+  nowMs = () => testStartTime + 5 * 60 * 1000;
+  draw();
+  const limitWarnBadge = document.querySelector(`.seat[data-no="${b2Seat}"] .chip[data-entry-id="${b2Entry.id}"] .badge.limit-warn`);
+  check(limitWarnBadge && limitWarnBadge.textContent === 'あと5分', 'B3: 残り5分で黄「あと5分」');
+
+  nowMs = () => testStartTime + 10 * 60 * 1000;
+  draw();
+  const limitAlertBadge = document.querySelector(`.seat[data-no="${b2Seat}"] .chip[data-entry-id="${b2Entry.id}"] .badge.limit-alert`);
+  check(limitAlertBadge && limitAlertBadge.textContent === '時間です', 'B3: 残り0分で赤点滅「時間です」');
+
+  /* B3-8: 「ほか」で数字欄 */
+  document.querySelector(`.seat[data-no="${b2Seat}"] .chip[data-entry-id="${b2Entry.id}"]`).click();
+  $('actTimers').querySelector('#btnLimitCancel').click();
+  check(b2Entry.limitEnd === null, 'B3: 時間指定取消でlimitEndがnull');
+  document.querySelector(`.seat[data-no="${b2Seat}"] .chip[data-entry-id="${b2Entry.id}"]`).click();
+  nowMs = () => testStartTime;
+  const btnOther = $('actTimers').querySelector('#btnLimitOther');
+  btnOther.click();
+  const customRow = $('actTimers').querySelector('.timer-custom-row');
+  check(customRow && customRow.style.display !== 'none', 'B3: 「ほか」を押すと数字欄が出る');
+  customRow.querySelector('input').value = '25';
+  customRow.querySelector('#btnLimitCustomOk').click();
+  check(b2Entry.limitEnd === testStartTime + 25 * 60 * 1000, 'B3: ほか入力でlimitEnd=今+25分が入る');
+
+  /* B3-9: 飲み放題と利用時間を同時に持てる */
+  document.querySelector(`.seat[data-no="${b2Seat}"] .chip[data-entry-id="${b2Entry.id}"]`).click();
+  $('actTimers').querySelector('#btnNomiStart').click();
+  check(b2Entry.nomiStart !== null && b2Entry.limitEnd !== null, 'B3: 飲み放題と利用時間の両方の値を同時に持てる');
+  draw();
+  const chipTimersEl = document.querySelector(`.seat[data-no="${b2Seat}"] .chip[data-entry-id="${b2Entry.id}"] .chip-timers`);
+  check(chipTimersEl && chipTimersEl.querySelectorAll('.badge').length === 2, 'B3: チップに飲み放題と利用時間の札が両方同時に付く');
+
+  /* B3-10: 食事終了で消え、戻すと復活 */
+  document.querySelector(`.seat[data-no="${b2Seat}"] .chip[data-entry-id="${b2Entry.id}"]`).click();
+  [...$('#actBtns').querySelectorAll('button')].find(b => b.textContent === '食事終了').click();
+  check(b2Entry.gone, 'B3: 食事終了になった');
+  draw();
+  check(!document.querySelector(`.seat[data-no="${b2Seat}"] .chip[data-entry-id="${b2Entry.id}"]`), 'B3: 食事終了で卓からチップが消える');
+  if ($('cxList').hidden) $('cxToggle').click();
+  const b3CxItem = document.querySelector(`#cxList .item[data-entry-id="${b2Entry.id}"]`);
+  check(b3CxItem && !b3CxItem.querySelector('.chip-timers'), 'B3: 終了・取消リストでは札が出ない');
+  b3CxItem.querySelector('button').click(); // 「使用中に戻す」
+  check(!b2Entry.gone && b2Entry.arrived, 'B3: 予約が使用中に戻った');
+  draw();
+  const restoredChipTimers = document.querySelector(`.seat[data-no="${b2Seat}"] .chip[data-entry-id="${b2Entry.id}"] .chip-timers`);
+  check(restoredChipTimers && restoredChipTimers.querySelectorAll('.badge').length === 2, 'B3: 使用中に戻すと札が復活する');
+
+  nowMs = origNowMs;
 
   db=JSON.parse(bk);date=oldDate;weekStart=oldWeekStart;save();draw();
   window.alert=_origAlert;
