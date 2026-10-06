@@ -203,16 +203,21 @@ header button{white-space:nowrap}
 body.practice #practiceBtn{display:none}
 body.practice{box-shadow:inset 0 0 0 5px var(--karashi)}
 body.practice header{background:color-mix(in srgb,var(--karashi) 22%,var(--sumi-lit))}
-.tut{position:fixed;left:50%;transform:translateX(-50%);width:min(560px,92vw);z-index:50;background:#fbf3df;color:#2a2018;
-  border:3px solid var(--karashi);border-radius:12px;padding:.7em .9em;box-shadow:0 8px 30px rgba(0,0,0,.55);font-size:1em;line-height:1.5}
+.tut{position:fixed;inset:auto;margin:0;width:min(380px,42vw);z-index:50;background:#fbf3df;color:#2a2018;
+  border:3px solid var(--karashi);border-radius:12px;padding:.6em .8em;box-shadow:0 8px 30px rgba(0,0,0,.55);font-size:1em;line-height:1.5;overflow:visible}
 .tut[hidden]{display:none}
-.tut{top:110px;transform:none;width:min(330px,40vw)}
-.tut.at-left{left:14px}
-.tut.at-right{left:auto;right:14px}
+/* 予約の画面などが開いている間は、画面の一番上に横長で出す（ダイアログに隠れない・重ならない） */
+.tut.in-dlg{width:min(900px,96vw);padding:.35em .7em;display:flex;align-items:center;gap:.7em;border-width:3px}
+.tut.in-dlg .tut-text{margin:0;flex:1;font-weight:700}
+.tut.in-dlg .tut-step,.tut.in-dlg .tut-ok{flex:none}
+.tut.in-dlg .tut-btns #tutBack,.tut.in-dlg .tut-btns span{display:none}
+.tut-ok{display:inline-block;background:#3d7a3a;color:#fff;font-weight:700;font-size:.8em;padding:.05em .5em;border-radius:4px;margin-bottom:.2em}
+.tut-ok[hidden]{display:none}
 .tut-step{font-size:.78em;font-weight:700;color:#8a5a00;letter-spacing:.05em}
 .tut-text{margin:.2em 0 .5em;white-space:pre-line}
-.tut-btns{display:flex;gap:.4em}
-.tut-btns button{white-space:nowrap;background:#fff;color:#2a2018;border:1px solid #c9b48a;min-height:40px;padding:.2em .8em}
+.tut-btns{display:flex;gap:.4em;flex-wrap:wrap}
+.tut-btns button{white-space:nowrap;background:#fff;color:#2a2018;border:1px solid #c9b48a;min-height:40px;padding:.2em .7em}
+.tut-btns button.go{background:var(--enji);color:#fff;border-color:var(--enji);font-weight:700}
 .tut-target{outline:4px solid var(--karashi)!important;outline-offset:2px;animation:tut-pulse 1.1s ease-in-out infinite;position:relative;z-index:5}
 @keyframes tut-pulse{0%,100%{outline-color:var(--karashi)}50%{outline-color:#fff4c2}}
 @media (prefers-reduced-motion:reduce){.tut-target{animation:none}}
@@ -351,7 +356,8 @@ form.f .message{grid-column:1/-1;margin:0;color:var(--enji-label);font-size:.85e
   <div id="actTimers" style="grid-column:1/-1;width:100%"></div>
 </form></dialog>
 <dialog id="editDlg"><form class="f" method="dialog" id="editFrm" autocomplete="off"></form></dialog>
-<div id="tut" class="tut" hidden role="dialog" aria-live="polite">
+<div id="tut" class="tut" hidden popover="manual" role="dialog" aria-live="polite">
+  <div class="tut-ok" id="tutOk" hidden>できました</div>
   <div class="tut-step" id="tutStep"></div>
   <div class="tut-text" id="tutText"></div>
   <div class="tut-btns">
@@ -479,6 +485,7 @@ const load=()=>{
 let db = load() || {entries:[], extra:[], occ:{}, fs:19};
 db.fs=Math.max(16,Math.min(24,Number(db.fs)||19));
 let undoStack=[], lastSaved=JSON.stringify(db);
+let undoCount=0;
 let practice=null;   // 練習中は {db,date,weekStart}（本番の状態の退避先）。メモリだけで、再読み込みすれば必ず本番に戻る
 const syncUndoBtn=()=>{const b=document.getElementById('undoBtn');if(b)b.disabled=!undoStack.length};
 const save=()=>{
@@ -504,7 +511,7 @@ function undo(){
   const prev=undoStack[undoStack.length-1];
   try{
     if(!practice) localStorage.setItem(KEY,prev);
-    undoStack.pop();
+    undoStack.pop();undoCount++;
     lastSaved=prev;
     db=JSON.parse(prev);
     syncUndoBtn();
@@ -1818,60 +1825,110 @@ $('practiceEnd').onclick=()=>exitPractice();
 $('tutAgain').onclick=()=>startTutorial();
 
 // 説明の中身。文言・光らせる場所・「できた」の判定を1行ずつ持つ（機能が変わったらここを直す）
+// inDialog: 予約の画面などが開いている間だけ出す指示（ダイアログのid → {text,target}）
 const byIdP=id=>db.entries.find(e=>e.id===id);
-const tut10=()=>db.entries.find(e=>e.tables.includes('10')&&!e.cancelled&&e.date===date);
+const tut10=()=>db.entries.find(e=>e.tables.includes('10')&&!e.cancelled&&!e.gone&&e.date===date);
+const btnIn=(dlgId,label)=>[...$(dlgId).querySelectorAll('button')].find(b=>b.textContent.trim()===label);
 const TUT_STEPS=[
-  {text:'空いている席「10」を押してください。\n予約の画面が開いたら、名前に「練習」と入れて、下の赤いボタンで保存します。',
-   target:()=>document.querySelector('.seat[data-no="10"]'),done:()=>!!tut10()},
-  {text:'席10に予約ができました。\n予約（名前のところ）を押して、「使用中にする」を押してください。席が青くなります。',
-   target:()=>document.querySelector('.seat[data-no="10"] .chip'),done:()=>!!tut10()&&tut10().arrived},
-  {text:'お客さんが帰ったら、もう一度予約を押して「食事終了」を押します。',
-   target:()=>document.querySelector('.seat[data-no="10"] .chip'),done:()=>db.entries.some(e=>e.date===date&&e.gone)},
-  {text:'終わった予約は左下の「終了・取消」に入ります。\n「表示」を押して、「使用中に戻す」を押すと元に戻せます。',
+  {text:'練習へようこそ。ここで入れた予約は本番には残りません。\n右側が店の席（数字が卓番）、左側が「まだ席が決まっていない予約」です。\n光っている場所を、言われたとおりに押していきます。',
+   target:()=>$('map'),next:true},
+  {text:'まず予約を1件入れます。\n空いている席「10」を押してください。',
+   target:()=>document.querySelector('.seat[data-no="10"]'),done:()=>!!tut10(),
+   inDialog:{dlg:{text:'名前の欄を押して「練習」と入れ、右下の赤いボタン「卓10に予約する」を押してください。',
+     target:()=>$('frm').name.value.trim()?$('frm').querySelector('button[value="ok"]'):$('frm').name}}},
+  {text:'席10に予約が入りました。\nお客さんが来たら、席10の予約（名前のところ）を押します。',
+   target:()=>document.querySelector('.seat[data-no="10"] .chip'),done:()=>!!tut10()&&tut10().arrived,
+   inDialog:{actDlg:{text:'光っている「使用中にする」を押してください。席が青くなります。',target:()=>btnIn('actDlg','使用中にする')}}},
+  {text:'席が青くなりました（使用中）。\nお客さんが帰ったら、また席10の予約を押します。',
+   target:()=>document.querySelector('.seat[data-no="10"] .chip'),done:()=>db.entries.some(e=>e.date===date&&e.gone),
+   inDialog:{actDlg:{text:'光っている「食事終了」を押してください。席が空きます。',target:()=>btnIn('actDlg','食事終了')},
+             askDlg:{text:'「終了」を押してください。',target:()=>$('askDlg').querySelector('button[value="yes"]')}}},
+  {text:'間違えて「食事終了」を押したときの戻し方です。\n左下の「終了・取消」の「表示」を押し、出てきた「使用中に戻す」を押してください。',
    target:()=>$('cxList').hidden?$('cxToggle'):$('cxList').querySelector('button'),done:()=>!db.entries.some(e=>e.date===date&&e.gone)},
-  {text:'左の「卓未定の予約」の青木様を、指で押さえたまま空いている席まで動かして離してください。\n席が決まっていない予約は、こうして席に入れます。',
+  {text:'左の「卓未定の予約」は、まだ席が決まっていない予約です。\n青木様のカードを指で押さえたまま、空いている席（どこでも大丈夫）まで動かして、指を離してください。',
    target:()=>document.querySelector('#resList .item[data-entry-id="p-hold"]'),done:()=>(byIdP('p-hold')?.tables.length||0)>0},
-  {text:'上の日付を押すと、その日の席に切り替わります。明日以降の日付を押してみてください。',
-   target:()=>[...document.querySelectorAll('#dates button')].find(b=>!b.classList.contains('on')&&!b.disabled),done:()=>date!==getOpenDate(today())},
-  {text:'上の「予約帳」を押すと、月のカレンダーが出ます。\n先の日の予約はここから日付を選んで入れます。押してみてください。',
-   target:()=>$('bookBtn'),done:()=>view==='book'},
-  {text:'カレンダーの日付を押すと、その日の席に戻ります。今日の日付を押してください。',
-   target:()=>document.querySelector(`#bookGrid .day[data-date="${getOpenDate(today())}"]`),done:()=>view==='seat'},
-  {text:'札の意味です（席に出ています）。\n・赤く点滅「遅れ」…予約の時間を過ぎても来ていない（席12）\n・「飲み放題 あと○分」→ 黄色「まもなくラストオーダー」→ 赤く点滅「ラストオーダー」（席8）\n・「あと○分」…席を空けるまでの時間（席9）\n使用中の予約を押すと、下に「飲み放題を始める」「あと何分で席を空けるか」があります。使わなければ押さなくて大丈夫です。',
+  {text:'席の中に出る表示の意味です（1/3）。\n赤く点滅して「遅れ」…予約の時間を過ぎても、まだ来ていないお客さんです（席12）。\n来店したら、予約を押して「使用中にする」を押します。',
+   target:()=>document.querySelector('.seat[data-no="12"]'),next:true},
+  {text:'表示の意味（2/3）。飲み放題の時間です（席8）。\n「飲み放題 あと○分」→ 75分で黄色「まもなくラストオーダー」→ 90分で赤く点滅「ラストオーダー」。\n黄色や赤になったら、お客さんに声をかけます。',
    target:()=>document.querySelector('.seat[data-no="8"]'),next:true},
-  {text:'右下の「バックアップ」は、予約をファイルに保存するボタンです（練習中は使えません）。\n間違えたときは、右上の「元に戻す」で1つ前に戻せます。',
-   target:()=>$('bkpOpen'),next:true},
-  {text:'おつかれさまでした。\n上の「練習を終わる」を押すと本番の画面に戻ります。練習で入れた予約は消えます。',
-   target:()=>$('practiceEnd'),next:true,last:true},
+  {text:'表示の意味（3/3）。「あと○分」は、席を空けてもらうまでの時間です（席9）。\n飲み放題とこの時間は、使用中の予約を押すと下にボタンがあります。使わない日は押さなくて大丈夫です。',
+   target:()=>document.querySelector('.seat[data-no="9"]'),next:true},
+  {text:'上の日付を押すと、その日の席に切り替わります。\n光っている日付を押してください。',
+   target:()=>[...document.querySelectorAll('#dates button')].find(b=>b.dataset.date>today()),done:()=>date>getOpenDate(today())},
+  {text:'先の日の予約は「予約帳」から入れます。\n上の光っている「予約帳」を押してください。',
+   target:()=>$('bookBtn'),done:()=>view==='book'},
+  {text:'月のカレンダーです。赤いマスは予約がある日です。\n日付を押すと、その日の席に移ります。光っている今日の日付を押してください。',
+   target:()=>document.querySelector(`#bookGrid .day[data-date="${getOpenDate(today())}"]`),done:()=>view==='seat'},
+  {text:'押し間違えたときは、右上の「元に戻す」で1つ前に戻せます。\n光っている「元に戻す」を押してみてください。',
+   target:()=>$('undoBtn'),done:()=>undoCount>tutUndoBase},
+  {text:'おつかれさまでした。これで練習は終わりです。\n下のボタンで本番の画面に戻ります（練習で入れた予約は消えます）。\nもう一度やるときは、上の「練習・使い方」から。',
+   target:null,last:true},
 ];
-let tutIdx=-1,tutTimer=null,tutEl=null;
+let tutIdx=-1,tutTimer=null,tutEl=null,tutDlg=null,tutUndoBase=0,tutOkTimer=null;
+function tutCur(){
+  const st=TUT_STEPS[tutIdx];
+  const d=[...document.querySelectorAll('dialog[open]')].pop()||null;
+  return {st,d,sub:(d&&st&&st.inDialog&&st.inDialog[d.id])||null};
+}
 function tutShow(){
   if(tutEl){tutEl.classList.remove('tut-target');tutEl=null}
-  const st=TUT_STEPS[tutIdx];if(!st){stopTutorial();return}
-  $('tut').hidden=false;
+  const {st,d,sub}=tutCur();if(!st){stopTutorial();return}
+  const t=$('tut');
+  t.hidden=false;
+  // ダイアログが開いた後に出し直すと、ダイアログより手前に出る
+  if(t.showPopover){try{if(t.matches(':popover-open'))t.hidePopover();t.showPopover()}catch(_e){}}
+  tutDlg=d?d.id:null;
+  t.classList.toggle('in-dlg',!!sub);
   $('tutStep').textContent=`練習 ${tutIdx+1} / ${TUT_STEPS.length}`;
-  $('tutText').textContent=st.text;
+  $('tutText').textContent=sub?sub.text:st.text;
   $('tutBack').disabled=tutIdx===0;
-  $('tutSkip').textContent=st.last?'おわり':(st.next?'次へ':'飛ばす');
-  tutEl=st.target&&st.target();
-  if(tutEl){
-    tutEl.classList.add('tut-target');
+  const skip=$('tutSkip');
+  skip.textContent=st.last?'練習を終えて本番へ戻る':(st.next?'次へ':'飛ばす');
+  skip.classList.toggle('go',!!(st.last||st.next));
+  const tg=sub?sub.target:st.target;
+  tutEl=tg?tg():null;
+  if(tutEl) tutEl.classList.add('tut-target');
+  t.style.left=t.style.top=t.style.right=t.style.bottom='';t.style.transform='';
+  if(sub){t.style.left='50%';t.style.top='6px';t.style.transform='translateX(-50%)';return}
+  // 光らせた場所の反対側に、高さはその場所にそろえて出す（目の移動を減らす）
+  const bw=t.offsetWidth,bh=t.offsetHeight;
+  if(tutEl&&tutEl!==$('map')){
     const r=tutEl.getBoundingClientRect();
-    const right=(r.left+r.right)/2>innerWidth*0.5;   // 光らせた場所に吹き出しが重ならないよう、反対側に出す
-    $('tut').classList.toggle('at-left',right);$('tut').classList.toggle('at-right',!right);
+    const onRight=(r.left+r.right)/2>innerWidth*0.5;
+    t.style.left=(onRight?14:innerWidth-bw-14)+'px';
+    t.style.top=Math.max(100,Math.min(innerHeight-bh-10,(r.top+r.bottom)/2-bh/2))+'px';
+  } else {
+    t.style.left=((innerWidth-bw)/2)+'px';t.style.top=Math.max(100,(innerHeight-bh)/2)+'px';
   }
+}
+function tutGo(i){
+  tutIdx=i;
+  tutUndoBase=undoCount;   // 「元に戻す」の手順は、この手順に入ってから押したかで判定する
+  tutShow();
 }
 function tutCheck(){
   if(tutIdx<0) return;
-  const st=TUT_STEPS[tutIdx];
-  if(st&&st.done&&st.done()){tutIdx++;tutShow();return}
-  // 再描画で光らせた要素が作り直されたら付け直す
-  if(st&&st.target){const el=st.target();if(el!==tutEl)tutShow()}
+  const {st,d}=tutCur();
+  if(st&&st.done&&st.done()){
+    // できたことを短く知らせてから次へ
+    $('tutOk').hidden=false;clearTimeout(tutOkTimer);tutOkTimer=setTimeout(()=>{$('tutOk').hidden=true},1800);
+    tutGo(tutIdx+1);return;
+  }
+  if((d?d.id:null)!==tutDlg){tutShow();return}
+  const {sub}=tutCur();
+  const tg=sub?sub.target:st&&st.target;
+  if(tg){const el=tg();if(el!==tutEl)tutShow()}
 }
-function startTutorial(){tutIdx=0;tutShow();clearInterval(tutTimer);tutTimer=setInterval(tutCheck,400)}
-function stopTutorial(){tutIdx=-1;clearInterval(tutTimer);tutTimer=null;if(tutEl){tutEl.classList.remove('tut-target');tutEl=null}$('tut').hidden=true}
-$('tutBack').onclick=()=>{if(tutIdx>0){tutIdx--;tutShow()}};
-$('tutSkip').onclick=()=>{if(TUT_STEPS[tutIdx]?.last){stopTutorial();return}tutIdx++;tutShow()};
+function startTutorial(){$('tutOk').hidden=true;tutGo(0);clearInterval(tutTimer);tutTimer=setInterval(tutCheck,400)}
+function stopTutorial(){
+  tutIdx=-1;clearInterval(tutTimer);tutTimer=null;
+  if(tutEl){tutEl.classList.remove('tut-target');tutEl=null}
+  const t=$('tut');t.hidden=true;if(t.hidePopover){try{t.hidePopover()}catch(_e){}}
+}
+// 手順を手で移るときは、開いたままの画面を閉じてから（前の手順のダイアログが残って迷わないように）
+const tutCloseDlgs=()=>document.querySelectorAll('dialog[open]').forEach(d=>d.close());
+$('tutBack').onclick=()=>{if(tutIdx>0){tutCloseDlgs();tutGo(tutIdx-1)}};
+$('tutSkip').onclick=()=>{if(TUT_STEPS[tutIdx]?.last){exitPractice();return}tutCloseDlgs();tutGo(tutIdx+1)};
 $('tutStop').onclick=()=>stopTutorial();
 
 $('bookBtn').onclick=()=>{if(view==='book'){view='seat'}else{view='book';bookMonth=date.slice(0,8)+'01'}draw()};
@@ -1879,9 +1936,9 @@ $('bookThis').onclick=()=>{bookMonth=today().slice(0,8)+'01';draw()};
 $('bookPrev').onclick=()=>{const d=parse(bookMonth);d.setMonth(d.getMonth()-1);bookMonth=ymd(d);draw()};
 $('bookNext').onclick=()=>{const d=parse(bookMonth);d.setMonth(d.getMonth()+1);bookMonth=ymd(d);draw()};
 $('wToday').onclick=()=>{date=getOpenDate(today());weekStart=mondayOf(date);draw()};
-$('fsUp').onclick=()=>{db.fs=Math.min(24,db.fs+1);try{lastSaved=JSON.stringify(db);localStorage.setItem(KEY,lastSaved)}catch(_e){}draw()};
-$('fsDown').onclick=()=>{db.fs=Math.max(16,db.fs-1);try{lastSaved=JSON.stringify(db);localStorage.setItem(KEY,lastSaved)}catch(_e){}draw()};
-$('grip').onclick=()=>{db.leftOff=!db.leftOff;try{lastSaved=JSON.stringify(db);localStorage.setItem(KEY,lastSaved)}catch(_e){}draw()};
+$('fsUp').onclick=()=>{db.fs=Math.min(24,db.fs+1);try{lastSaved=JSON.stringify(db);if(!practice)localStorage.setItem(KEY,lastSaved)}catch(_e){}draw()};
+$('fsDown').onclick=()=>{db.fs=Math.max(16,db.fs-1);try{lastSaved=JSON.stringify(db);if(!practice)localStorage.setItem(KEY,lastSaved)}catch(_e){}draw()};
+$('grip').onclick=()=>{db.leftOff=!db.leftOff;try{lastSaved=JSON.stringify(db);if(!practice)localStorage.setItem(KEY,lastSaved)}catch(_e){}draw()};
 $('addRes').onclick=()=>openForm('res',null);
 $('cxToggle').onclick=()=>{const l=$('cxList');l.hidden=!l.hidden;$('cxToggle').textContent=l.hidden?'表示':'隠す'};
 $('exAdd').onclick=()=>{
@@ -3193,23 +3250,39 @@ if(location.search.includes('test=1')) (async()=>{
     $('practiceBtn').click();
     check(practice&&document.body.classList.contains('practice')&&!$('practiceTag').hidden&&$('practiceTag').textContent.includes('練習中'),'練習: 押すと練習中の帯が出る');
     check(db.entries.some(e=>e.name==='青木様')&&db.entries.every(e=>/様$/.test(e.name)),'練習: 架空の客名のデモが入る');
-    check(!$('tut').hidden&&$('tutStep').textContent.startsWith('練習 1 /')&&document.querySelector('.seat[data-no="10"]').classList.contains('tut-target'),'練習: 説明の1つ目が出て、押す場所が光る');
+    check(!$('tut').hidden&&$('tutStep').textContent.startsWith('練習 1 /')&&$('tutSkip').textContent==='次へ','練習: 最初に画面の見方の説明が出る');
+    $('tutSkip').click();
+    check($('tutStep').textContent.startsWith('練習 2 /')&&document.querySelector('.seat[data-no="10"]').classList.contains('tut-target'),'練習: 次へで、押す席が光る');
     document.querySelector('.seat[data-no="10"]').click();
-    $('frm').name.value='練習';
+    tutCheck();
+    check($('tut').classList.contains('in-dlg')&&$('tutText').textContent.includes('「練習」と入れ')&&$('frm').name.classList.contains('tut-target'),'練習: 予約の画面が開くと、上に横長の指示が出て名前の欄が光る');
+    check(!$('tut').showPopover||$('tut').matches(':popover-open'),'練習: 指示はダイアログより手前（最前面）に出る');
+    $('frm').name.value='練習';$('frm').name.dispatchEvent(new Event('input'));
+    tutCheck();
+    check($('frm').querySelector('button[value="ok"]').classList.contains('tut-target'),'練習: 名前を入れると、次は保存のボタンが光る');
     $('frm').querySelector('button[value="ok"]').click();
     tutCheck();
-    check($('tutStep').textContent.startsWith('練習 2 /'),'練習: 操作すると説明が自動で次へ進む');
+    check($('tutStep').textContent.startsWith('練習 3 /')&&!$('tutOk').hidden,'練習: できると「できました」が出て自動で次へ進む');
     document.querySelector('.seat[data-no="10"] .chip').click();
-    [...$('actDlg').querySelectorAll('button')].find(b=>b.textContent==='使用中にする').click();
     tutCheck();
-    check($('tutStep').textContent.startsWith('練習 3 /'),'練習: 使用中にすると3つ目へ');
+    check(btnIn('actDlg','使用中にする').classList.contains('tut-target'),'練習: 操作の画面では押すボタン（使用中にする）が光る');
+    btnIn('actDlg','使用中にする').click();
+    tutCheck();
+    check($('tutStep').textContent.startsWith('練習 4 /'),'練習: 使用中にすると次へ');
     $('tutBack').click();
-    check($('tutStep').textContent.startsWith('練習 2 /'),'練習: 「戻る」で1つ前へ');
+    check($('tutStep').textContent.startsWith('練習 3 /'),'練習: 「戻る」で1つ前へ');
     $('tutSkip').click();
-    check($('tutStep').textContent.startsWith('練習 3 /'),'練習: 「飛ばす」で次へ');
-    check(localStorage.getItem(KEY)===realRaw,'練習: 練習中に予約を作っても本番の保存データは1文字も変わらない');
+    check($('tutStep').textContent.startsWith('練習 4 /'),'練習: 「飛ばす」で次へ');
+    $('fsUp').click();$('grip').click();$('grip').click();
+    check(localStorage.getItem(KEY)===realRaw,'練習: 練習中に予約を作っても・文字の大きさや一覧の開閉を変えても、本番の保存データは1文字も変わらない');
     $('bkpOpen').click();
     check(!$('backupDlg').open&&$('hint').textContent.includes('練習中は'),'練習: 練習中はバックアップを開かない');
+    tutGo(9);
+    const nextDayBtn=document.querySelector('#dates .tut-target');
+    check(nextDayBtn&&nextDayBtn.dataset.date>today(),'練習: 日付の手順で光るのは今日より先の日付');
+    tutGo(TUT_STEPS.length-1);
+    check($('tutSkip').textContent==='練習を終えて本番へ戻る','練習: 最後は「練習を終えて本番へ戻る」ボタン');
+    tutGo(4);
     $('tutStop').click();
     check($('tut').hidden&&practice,'練習: 「説明を閉じる」で説明だけ消え、練習は続く');
     $('practiceEnd').click();
