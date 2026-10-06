@@ -178,6 +178,30 @@ header h1{font-size:1em;margin:0 .4em 0 0;font-weight:700;letter-spacing:.22em}
 .extra .seat{min-width:0}
 .extra-del{flex:none;width:1.65em;padding:0;border-radius:7px;color:var(--kinari);opacity:.7}
 .hint{font-size:.8em;color:var(--kinari);opacity:.65;padding:0 .2em}
+/* 練習モード: 本番と取り違えないよう、画面のふちと見出しを洋がらしにする */
+.practice-btn{font-size:.8em;padding:.2em .6em}
+body.practice .practice-btn{background:var(--karashi);color:var(--sumi);font-weight:700;border-color:var(--karashi)}
+header button{white-space:nowrap}
+.practice-bar{display:flex;align-items:center;gap:.5em;flex:none;background:var(--karashi);color:var(--sumi);font-weight:700;padding:.25em .7em}
+.practice-bar[hidden]{display:none}
+.practice-bar .grow{flex:1}
+.practice-bar button{min-height:36px;padding:.15em .8em;background:var(--sumi);color:var(--kinari);border-color:var(--sumi)}
+body.practice #practiceBtn{display:none}
+body.practice{box-shadow:inset 0 0 0 5px var(--karashi)}
+body.practice header{background:color-mix(in srgb,var(--karashi) 22%,var(--sumi-lit))}
+.tut{position:fixed;left:50%;transform:translateX(-50%);width:min(560px,92vw);z-index:50;background:#fbf3df;color:#2a2018;
+  border:3px solid var(--karashi);border-radius:12px;padding:.7em .9em;box-shadow:0 8px 30px rgba(0,0,0,.55);font-size:1em;line-height:1.5}
+.tut[hidden]{display:none}
+.tut{top:110px;transform:none;width:min(330px,40vw)}
+.tut.at-left{left:14px}
+.tut.at-right{left:auto;right:14px}
+.tut-step{font-size:.78em;font-weight:700;color:#8a5a00;letter-spacing:.05em}
+.tut-text{margin:.2em 0 .5em;white-space:pre-line}
+.tut-btns{display:flex;gap:.4em}
+.tut-btns button{white-space:nowrap;background:#fff;color:#2a2018;border:1px solid #c9b48a;min-height:40px;padding:.2em .8em}
+.tut-target{outline:4px solid var(--karashi)!important;outline-offset:2px;animation:tut-pulse 1.1s ease-in-out infinite;position:relative;z-index:5}
+@keyframes tut-pulse{0%,100%{outline-color:var(--karashi)}50%{outline-color:#fff4c2}}
+@media (prefers-reduced-motion:reduce){.tut-target{animation:none}}
 .awake-btn{font-size:.8em;padding:.2em .6em}
 .awake-btn.off{border-color:var(--enji-label);color:var(--enji-label)}
 #bkpOpen.warn{border-color:var(--enji);background:var(--enji);color:var(--kinari);font-weight:700}
@@ -239,6 +263,7 @@ form.f .message{grid-column:1/-1;margin:0;color:var(--enji-label);font-size:.85e
 <header>
   <h1>一平</h1>
   <button id="awakeBtn" class="awake-btn off" type="button">画面: 確認中</button>
+  <button id="practiceBtn" class="practice-btn" type="button">練習・使い方</button>
   <span class="grow"></span>
   <button id="bookBtn" class="book-btn">予約帳</button>
   <button id="wPrev">‹ 前週</button>
@@ -250,6 +275,12 @@ form.f .message{grid-column:1/-1;margin:0;color:var(--enji-label);font-size:.85e
   <button id="fsUp">文字 大</button>
 </header>
 
+<div id="practiceTag" class="practice-bar" hidden>
+  <span>練習中 ― ここで入れた予約は本番に残りません</span>
+  <span class="grow"></span>
+  <button type="button" id="tutAgain">説明をもう一度</button>
+  <button type="button" id="practiceEnd" class="on">練習を終わる</button>
+</div>
 <div id="dates"></div>
 <div id="notTodayBar" class="not-today-bar" hidden></div>
 
@@ -305,6 +336,16 @@ form.f .message{grid-column:1/-1;margin:0;color:var(--enji-label);font-size:.85e
   <div id="actTimers" style="grid-column:1/-1;width:100%"></div>
 </form></dialog>
 <dialog id="editDlg"><form class="f" method="dialog" id="editFrm" autocomplete="off"></form></dialog>
+<div id="tut" class="tut" hidden role="dialog" aria-live="polite">
+  <div class="tut-step" id="tutStep"></div>
+  <div class="tut-text" id="tutText"></div>
+  <div class="tut-btns">
+    <button type="button" id="tutBack">戻る</button>
+    <button type="button" id="tutSkip">飛ばす</button>
+    <span style="flex:1"></span>
+    <button type="button" id="tutStop">説明を閉じる</button>
+  </div>
+</div>
 <dialog id="awakeDlg"><form class="f" method="dialog">
   <h3 style="grid-column:1/-1;margin:0">画面を消さない・暗くしない</h3>
   <p id="awakeNow" style="grid-column:1/-1;margin:0"></p>
@@ -423,12 +464,13 @@ const load=()=>{
 let db = load() || {entries:[], extra:[], occ:{}, fs:19};
 db.fs=Math.max(16,Math.min(24,Number(db.fs)||19));
 let undoStack=[], lastSaved=JSON.stringify(db);
+let practice=null;   // 練習中は {db,date,weekStart}（本番の状態の退避先）。メモリだけで、再読み込みすれば必ず本番に戻る
 const syncUndoBtn=()=>{const b=document.getElementById('undoBtn');if(b)b.disabled=!undoStack.length};
 const save=()=>{
   const prevSaved=lastSaved;
   try{
     const cur=JSON.stringify(db);
-    localStorage.setItem(KEY,cur);
+    if(!practice) localStorage.setItem(KEY,cur);   // 練習中は本番の保存領域に一切書かない
     undoStack.push(prevSaved);
     if(undoStack.length>5)undoStack.shift();
     lastSaved=cur;
@@ -446,7 +488,7 @@ function undo(){
   if(!undoStack.length) return;
   const prev=undoStack[undoStack.length-1];
   try{
-    localStorage.setItem(KEY,prev);
+    if(!practice) localStorage.setItem(KEY,prev);
     undoStack.pop();
     lastSaved=prev;
     db=JSON.parse(prev);
@@ -464,6 +506,7 @@ function undo(){
 }
 
 addEventListener('storage',ev=>{
+  if(practice) return;   // 練習中は追従しない（練習を終わるときに最新を読み直す）
   if(ev.key!==KEY||!ev.newValue||ev.newValue===lastSaved) return;
   document.querySelectorAll('dialog[open]').forEach(d=>d.close());
   db=JSON.parse(ev.newValue);lastSaved=ev.newValue;undoStack=[];syncUndoBtn();draw();
@@ -555,6 +598,7 @@ async function saveSnapshot(kind='manual',currentList,snap){
   }
 }
 async function createDailySnapshot(){
+  if(practice) return;
   try{const list=await listSnapshots();if(!hasAutoSnapshotOn(list,today()))await saveSnapshot('auto',list)}catch(_e){}
 }
 function restoreSnapshot(snapshot){
@@ -1693,6 +1737,105 @@ const $=id=>document.getElementById(id.startsWith('#')?id.slice(1):id);
 $('wPrev').onclick=()=>{weekStart=addDays(weekStart,-7);date=getOpenDate(weekStart);draw()};
 $('wNext').onclick=()=>{weekStart=addDays(weekStart,7);date=getOpenDate(weekStart);draw()};
 $('undoBtn').onclick=undo;
+/* ---------- 練習モード・使い方 ---------- */
+function practiceData(){
+  const t=today(),now=Date.now();
+  const d=new Date(now-20*60000);   // 「遅れ」を見せるため、今より20分前の予約を1件置く
+  const lateHM=String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
+  const e=(o)=>Object.assign({date:t,kind:'res',tel:'',note:'',time:'',people:2,children:0,tables:[],arrived:false,gone:false,called:false,cancelled:false,nomiStart:null,limitEnd:null},o);
+  return {fs:db.fs,extra:[],occ:{},leftOff:false,entries:[
+    e({id:'p-hold',name:'青木様',time:'18:30',people:4,children:1,note:'座敷希望'}),
+    e({id:'p-wait',name:'大野様',kind:'wait',tel:'090-0000-1234',people:2,note:'空き次第'}),
+    e({id:'p-late',name:'上田様',time:lateHM,people:3,tables:['12']}),
+    e({id:'p-nomi',name:'石井様',time:'17:30',people:4,tables:['8'],arrived:true,nomiStart:now-80*60000}),
+    e({id:'p-limit',name:'江口様',time:'18:00',people:2,tables:['9'],arrived:true,limitEnd:now+12*60000}),
+    e({id:'p-cnt',name:'加藤様',time:'20:00',people:2,tables:['1','2']}),
+    e({id:'p-zashiki',name:'佐々木様',time:'19:00',people:8,children:2,tables:['17']}),
+  ]};
+}
+function enterPractice(){
+  if(practice) return;
+  document.querySelectorAll('dialog[open]').forEach(d=>d.close());
+  practice={db,date,weekStart,undoStack,lastSaved};
+  db=practiceData();
+  undoStack=[];lastSaved=JSON.stringify(db);syncUndoBtn();
+  date=getOpenDate(today());weekStart=mondayOf(date);view='seat';
+  document.body.classList.add('practice');
+  $('practiceTag').hidden=false;
+  draw();startTutorial();
+}
+function exitPractice(){
+  if(!practice) return;
+  document.querySelectorAll('dialog[open]').forEach(d=>d.close());
+  stopTutorial();
+  db=load()||practice.db;   // 練習中に別の画面で保存された分も含め、本番の最新を読み直す
+  date=practice.date;weekStart=practice.weekStart;undoStack=practice.undoStack;lastSaved=JSON.stringify(db);
+  practice=null;syncUndoBtn();view='seat';
+  document.body.classList.remove('practice');
+  $('practiceTag').hidden=true;
+  draw();
+}
+$('practiceBtn').onclick=()=>enterPractice();
+$('practiceEnd').onclick=()=>exitPractice();
+$('tutAgain').onclick=()=>startTutorial();
+
+// 説明の中身。文言・光らせる場所・「できた」の判定を1行ずつ持つ（機能が変わったらここを直す）
+const byIdP=id=>db.entries.find(e=>e.id===id);
+const tut10=()=>db.entries.find(e=>e.tables.includes('10')&&!e.cancelled&&e.date===date);
+const TUT_STEPS=[
+  {text:'空いている席「10」を押してください。\n予約の画面が開いたら、名前に「練習」と入れて、下の赤いボタンで保存します。',
+   target:()=>document.querySelector('.seat[data-no="10"]'),done:()=>!!tut10()},
+  {text:'席10に予約ができました。\n予約（名前のところ）を押して、「使用中にする」を押してください。席が青くなります。',
+   target:()=>document.querySelector('.seat[data-no="10"] .chip'),done:()=>!!tut10()&&tut10().arrived},
+  {text:'お客さんが帰ったら、もう一度予約を押して「食事終了」を押します。',
+   target:()=>document.querySelector('.seat[data-no="10"] .chip'),done:()=>db.entries.some(e=>e.date===date&&e.gone)},
+  {text:'終わった予約は左下の「終了・取消」に入ります。\n「表示」を押して、「使用中に戻す」を押すと元に戻せます。',
+   target:()=>$('cxList').hidden?$('cxToggle'):$('cxList').querySelector('button'),done:()=>!db.entries.some(e=>e.date===date&&e.gone)},
+  {text:'左の「卓未定の予約」の青木様を、指で押さえたまま空いている席まで動かして離してください。\n席が決まっていない予約は、こうして席に入れます。',
+   target:()=>document.querySelector('#resList .item[data-entry-id="p-hold"]'),done:()=>(byIdP('p-hold')?.tables.length||0)>0},
+  {text:'上の日付を押すと、その日の席に切り替わります。明日以降の日付を押してみてください。',
+   target:()=>[...document.querySelectorAll('#dates button')].find(b=>!b.classList.contains('on')&&!b.disabled),done:()=>date!==getOpenDate(today())},
+  {text:'上の「予約帳」を押すと、月のカレンダーが出ます。\n先の日の予約はここから日付を選んで入れます。押してみてください。',
+   target:()=>$('bookBtn'),done:()=>view==='book'},
+  {text:'カレンダーの日付を押すと、その日の席に戻ります。今日の日付を押してください。',
+   target:()=>document.querySelector(`#bookGrid .day[data-date="${getOpenDate(today())}"]`),done:()=>view==='seat'},
+  {text:'札の意味です（席に出ています）。\n・赤く点滅「遅れ」…予約の時間を過ぎても来ていない（席12）\n・「飲み放題 あと○分」→ 黄色「まもなくラストオーダー」→ 赤く点滅「ラストオーダー」（席8）\n・「あと○分」…席を空けるまでの時間（席9）\n使用中の予約を押すと、下に「飲み放題を始める」「あと何分で席を空けるか」があります。使わなければ押さなくて大丈夫です。',
+   target:()=>document.querySelector('.seat[data-no="8"]'),next:true},
+  {text:'右下の「バックアップ」は、予約をファイルに保存するボタンです（練習中は使えません）。\n間違えたときは、右上の「元に戻す」で1つ前に戻せます。',
+   target:()=>$('bkpOpen'),next:true},
+  {text:'おつかれさまでした。\n上の「練習を終わる」を押すと本番の画面に戻ります。練習で入れた予約は消えます。',
+   target:()=>$('practiceEnd'),next:true,last:true},
+];
+let tutIdx=-1,tutTimer=null,tutEl=null;
+function tutShow(){
+  if(tutEl){tutEl.classList.remove('tut-target');tutEl=null}
+  const st=TUT_STEPS[tutIdx];if(!st){stopTutorial();return}
+  $('tut').hidden=false;
+  $('tutStep').textContent=`練習 ${tutIdx+1} / ${TUT_STEPS.length}`;
+  $('tutText').textContent=st.text;
+  $('tutBack').disabled=tutIdx===0;
+  $('tutSkip').textContent=st.last?'おわり':(st.next?'次へ':'飛ばす');
+  tutEl=st.target&&st.target();
+  if(tutEl){
+    tutEl.classList.add('tut-target');
+    const r=tutEl.getBoundingClientRect();
+    const right=(r.left+r.right)/2>innerWidth*0.5;   // 光らせた場所に吹き出しが重ならないよう、反対側に出す
+    $('tut').classList.toggle('at-left',right);$('tut').classList.toggle('at-right',!right);
+  }
+}
+function tutCheck(){
+  if(tutIdx<0) return;
+  const st=TUT_STEPS[tutIdx];
+  if(st&&st.done&&st.done()){tutIdx++;tutShow();return}
+  // 再描画で光らせた要素が作り直されたら付け直す
+  if(st&&st.target){const el=st.target();if(el!==tutEl)tutShow()}
+}
+function startTutorial(){tutIdx=0;tutShow();clearInterval(tutTimer);tutTimer=setInterval(tutCheck,400)}
+function stopTutorial(){tutIdx=-1;clearInterval(tutTimer);tutTimer=null;if(tutEl){tutEl.classList.remove('tut-target');tutEl=null}$('tut').hidden=true}
+$('tutBack').onclick=()=>{if(tutIdx>0){tutIdx--;tutShow()}};
+$('tutSkip').onclick=()=>{if(TUT_STEPS[tutIdx]?.last){stopTutorial();return}tutIdx++;tutShow()};
+$('tutStop').onclick=()=>stopTutorial();
+
 $('bookBtn').onclick=()=>{if(view==='book'){view='seat'}else{view='book';bookMonth=date.slice(0,8)+'01'}draw()};
 $('bookPrev').onclick=()=>{const d=parse(bookMonth);d.setMonth(d.getMonth()-1);bookMonth=ymd(d);draw()};
 $('bookNext').onclick=()=>{const d=parse(bookMonth);d.setMonth(d.getMonth()+1);bookMonth=ymd(d);draw()};
@@ -1709,6 +1852,10 @@ $('exAdd').onclick=()=>{
 };
 const bkpDlg=$('backupDlg');
 $('bkpOpen').onclick=()=>{
+  if(practice){
+    const h=$('hint');h.textContent='練習中はバックアップは使えません（本番の画面で使います）';
+    setTimeout(()=>{if(h.textContent.startsWith('練習中は'))h.textContent=''},3000);return;
+  }
   const stale=exportStaleDays();
   $('bkpLastExport').textContent = db.lastExport
     ? `最後にファイルへ保存した日: ${db.lastExport}（${stale}日前）`
@@ -2999,6 +3146,37 @@ if(location.search.includes('test=1')) (async()=>{
   check(restoredChipTimers && restoredChipTimers.querySelectorAll('.badge').length === 2, 'B3: 使用中に戻すと札が復活する');
 
   nowMs = origNowMs;
+
+  /* === バッチ5: 練習モードとチュートリアル === */
+  {
+    save();
+    const realRaw=localStorage.getItem(KEY), realCount=db.entries.length;
+    $('practiceBtn').click();
+    check(practice&&document.body.classList.contains('practice')&&!$('practiceTag').hidden&&$('practiceTag').textContent.includes('練習中'),'練習: 押すと練習中の帯が出る');
+    check(db.entries.some(e=>e.name==='青木様')&&db.entries.every(e=>/様$/.test(e.name)),'練習: 架空の客名のデモが入る');
+    check(!$('tut').hidden&&$('tutStep').textContent.startsWith('練習 1 /')&&document.querySelector('.seat[data-no="10"]').classList.contains('tut-target'),'練習: 説明の1つ目が出て、押す場所が光る');
+    document.querySelector('.seat[data-no="10"]').click();
+    $('frm').name.value='練習';
+    $('frm').querySelector('button[value="ok"]').click();
+    tutCheck();
+    check($('tutStep').textContent.startsWith('練習 2 /'),'練習: 操作すると説明が自動で次へ進む');
+    document.querySelector('.seat[data-no="10"] .chip').click();
+    [...$('actDlg').querySelectorAll('button')].find(b=>b.textContent==='使用中にする').click();
+    tutCheck();
+    check($('tutStep').textContent.startsWith('練習 3 /'),'練習: 使用中にすると3つ目へ');
+    $('tutBack').click();
+    check($('tutStep').textContent.startsWith('練習 2 /'),'練習: 「戻る」で1つ前へ');
+    $('tutSkip').click();
+    check($('tutStep').textContent.startsWith('練習 3 /'),'練習: 「飛ばす」で次へ');
+    check(localStorage.getItem(KEY)===realRaw,'練習: 練習中に予約を作っても本番の保存データは1文字も変わらない');
+    $('bkpOpen').click();
+    check(!$('backupDlg').open&&$('hint').textContent.includes('練習中は'),'練習: 練習中はバックアップを開かない');
+    $('tutStop').click();
+    check($('tut').hidden&&practice,'練習: 「説明を閉じる」で説明だけ消え、練習は続く');
+    $('practiceEnd').click();
+    check(!practice&&!document.body.classList.contains('practice')&&$('practiceTag').hidden&&db.entries.length===realCount&&!db.entries.some(e=>e.name==='青木様'),'練習: 「練習を終わる」で本番の予約に戻る');
+    check(localStorage.getItem(KEY)===realRaw,'練習: 終わった後も本番の保存データは変わっていない');
+  }
 
   /* === バッチ6: 画面を消さない === */
   {
