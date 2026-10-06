@@ -110,6 +110,11 @@ header h1{font-size:1em;margin:0 .4em 0 0;font-weight:700;letter-spacing:.22em}
 .chip:active{cursor:grabbing}
 .chip.arrived{border-left-color:var(--ao)!important}
 .chip.next{background:var(--sumi-lit)!important;border-left-color:var(--moegi)!important}
+/* 予約時間を過ぎても来店していない予約: 赤く点滅＋「遅れ」の札（色だけに頼らない） */
+.chip.late,.item.late{border-left-color:#e5483b!important;animation:late-blink 1.2s ease-in-out infinite}
+.badge.late{background:#e5483b;color:#fff}
+@keyframes late-blink{0%,100%{background:var(--sumi-lit)}50%{background:#7a1f19}}
+@media (prefers-reduced-motion:reduce){.chip.late,.item.late{animation:none;background:#7a1f19}}
 .chip.solo .chip-name{font-size:clamp(1em,22cqw,1.75em);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}  /* 1件なら縦に余裕がある。最大2行 */
 .chip.solo .chip-meta{flex-direction:row;gap:.5em;font-size:clamp(.85em,13cqw,1.2em);margin-top:.15em}
 .chip.solo .chip-time{order:-1}
@@ -489,6 +494,11 @@ let lastToday=today();
 const WD=['日','月','火','水','木','金','土'];
 let date=getOpenDate(today()), weekStart=mondayOf(date);
 
+let nowHM=()=>{const d=new Date();return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')};
+// 今日で、時間が決まっていて、その時間を過ぎても来店していない通常予約
+const isLate=e=>e.date===today()&&e.kind!=='wait'&&!!e.time&&!e.arrived&&!e.cancelled&&!e.gone&&e.time<nowHM();
+const lateSig=()=>db.entries.filter(isLate).map(e=>e.id).join();
+let lastLateSig='';
 function checkDayChange(){
   const nowToday=today();
   if(nowToday!==lastToday){
@@ -505,6 +515,7 @@ function checkDayChange(){
 }
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)checkDayChange()});
 setInterval(checkDayChange,60000);
+setInterval(()=>{const g=lateSig();if(g!==lastLateSig){lastLateSig=g;draw()}},30000);
 
 /* ---------- 席 ---------- */
 const ROWS=[
@@ -593,7 +604,11 @@ function drawLists(){
   if(!arr.length){box.innerHTML='<div class="empty">卓未定なし</div>';}
   else{
     arr.sort((a,b)=>(a.time||'zz').localeCompare(b.time||'zz'));
-    arr.forEach(e=>box.appendChild(itemEl(e)));
+    arr.forEach(e=>{
+      const el=itemEl(e);
+      if(isLate(e)){el.classList.add('late');const lb=document.createElement('span');lb.className='badge late';lb.textContent='遅れ';const nm=el.querySelector('.nm');if(nm)nm.before(lb)}
+      box.appendChild(el);
+    });
   }
   const vanished=db.entries.filter(e=>e.date===date&&(e.cancelled||e.gone)).slice().reverse();
   document.getElementById('cxHead').firstChild.textContent=`終了・取消 (${vanished.length}) `;
@@ -708,7 +723,7 @@ function seatEl(no){
       const isNext=hasArrived&&!e.arrived;
       const isWait=e.kind==='wait';
       const c=document.createElement('div');
-      c.className='chip'+(here.length>1?' two-line':' solo')+(e.arrived?' arrived':'')+(isNext?' next':'');
+      c.className='chip'+(here.length>1?' two-line':' solo')+(e.arrived?' arrived':'')+(isNext?' next':'')+(isLate(e)?' late':'');
       c.style.borderLeftColor=isNext?'var(--moegi)':(e.arrived?'var(--ao)':(isWait?'var(--karashi)':color(e.id)));
       c.innerHTML='<div class="l1"><b class="chip-name"></b></div><div class="chip-meta"><span class="chip-people"></span></div>';
       if(isNext){
@@ -716,6 +731,11 @@ function seatEl(no){
         nb.className='badge next';
         nb.textContent='次';
         c.querySelector('.chip-name').before(nb);
+      } else if(isLate(e)){
+        const lb=document.createElement('span');
+        lb.className='badge late';
+        lb.textContent='遅れ';
+        c.querySelector('.chip-name').before(lb);
       } else if(isWait && !e.arrived){
         const wb=document.createElement('span');
         wb.className='badge';
@@ -806,6 +826,8 @@ function confirmThen(message,onYes,yesLabel='終了'){
   dlg.querySelector('button[value="yes"]').onclick=()=>{dlg.close();onYes()};
   dlg.showModal();
 }
+// 入力欄に自動で焦点が当たりキーボードが開くのを防ぐ。入力欄を押したときだけ開く
+function noKeyboard(d){d.tabIndex=-1;d.focus()}
 function seatGroup(no, d = date){
   const row=ROWS.find(r=>r.nos.includes(no));
   return row ? row.lab : (extraOf(d).includes(no)?'追加':null);
@@ -1208,7 +1230,7 @@ function openForm(kind,e,forDate,seatNo){
   f.onkeydown=ev=>{if(ev.key==='Enter'&&ev.isComposing) ev.preventDefault()};
   const dlg=document.getElementById('dlg');
   dlg.onclose=null;
-  dlg.showModal();
+  dlg.showModal();noKeyboard(dlg);
 
   f.onsubmit=ev=>{
     const v=ev.submitter?.value??'ok';
@@ -1337,7 +1359,7 @@ function openEdit(e,no){
     else if(action==='cancel'){cancelEntry(e);return}
     save();draw();
   };
-  dlg.showModal();
+  dlg.showModal();noKeyboard(dlg);
 }
 
 /* ---------- ヘッダー ---------- */
@@ -1958,6 +1980,27 @@ if(location.search.includes('test=1')) (async()=>{
   check(!$('dlg').style.position&&!$('dlg').style.maxHeight&&!$('dlg').style.top,'キーボードが引っ込んだら元の中央表示に戻す');
   fitDialogsToKeyboard(0,800,0);$('dlg').close();
 
+  /* === 来店予定時間を過ぎた未来店の予約を「遅れ」で目立たせる === */
+  {
+    const entry=(id,name,tables=[])=>({id,date:today(),kind:'res',name,tables,people:null,time:'',tel:'',note:'',arrived:false,gone:false,called:false,cancelled:false});
+    const origNow=nowHM;nowHM=()=>'19:30';
+    const lt=entry('late-1','遅れ客',['9']);lt.time='19:00';
+    const ok=entry('late-2','まだ客',['10']);ok.time='20:00';
+    const ar=entry('late-3','来店客X',['11']);ar.time='19:00';ar.arrived=true;
+    const wt=entry('late-4','電話待ち客',[]);wt.time='19:00';wt.kind='wait';
+    const hd=entry('late-5','保留遅れ',[]);hd.time='19:10';
+    db.entries.push(lt,ok,ar,wt,hd);date=getOpenDate(today());draw();
+    check(isLate(lt)&&!isLate(ok)&&!isLate(ar)&&!isLate(wt),'遅れ判定: 時間超過・未来店・通常予約だけが遅れ');
+    const lc=document.querySelector('.chip[data-entry-id="late-1"]');
+    check(lc&&lc.classList.contains('late')&&lc.querySelector('.badge.late').textContent==='遅れ','遅れの予約は赤い点滅の札「遅れ」付きで出る');
+    check(!document.querySelector('.chip[data-entry-id="late-2"]').classList.contains('late'),'時間前の予約には出ない');
+    check(!document.querySelector('.chip[data-entry-id="late-3"]').classList.contains('late'),'来店済みには出ない');
+    const hc=document.querySelector('#resList .item[data-entry-id="late-5"]');
+    check(hc&&hc.classList.contains('late'),'卓未定の予約でも遅れが出る');
+    nowHM=origNow;
+    db.entries=db.entries.filter(e=>!e.id.startsWith('late-'));draw();
+  }
+
   /* === 今日ボタン === */
   date=getOpenDate(addDays(today(),14));weekStart=mondayOf(date);draw();
   $('wToday').click();
@@ -1973,7 +2016,7 @@ if(location.search.includes('test=1')) (async()=>{
      ============================================================== */
   /* 1. 日付が変わった状態（today() を差し替え）で visibilitychange を発火すると、前日を開いていた画面が新しい今日へ移り、空席で名前空欄保存が来店客になる（B1） */
   const origToday = today;
-  const tomorrowStr = addDays(origToday(), 1);
+  const tomorrowStr = getOpenDate(addDays(origToday(), 1)); // 水曜(定休日)に当たると日付が移らないので、開く日へ
   date = origToday(); draw();
   today = () => tomorrowStr;
   document.dispatchEvent(new Event('visibilitychange'));
