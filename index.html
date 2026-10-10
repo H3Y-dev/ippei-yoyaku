@@ -177,6 +177,7 @@ header h1{font-size:1em;margin:0 .4em 0 0;font-weight:700;letter-spacing:.22em}
 .chip-name{min-width:0;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-weight:700;padding:.2em 0}
 .chip-meta{display:flex;flex-direction:column;gap:1px;min-width:0;overflow:hidden}
 .chip-people,.chip-time{overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-weight:600}
+.chip-tbls{font-size:clamp(.6em,10cqw,.85em);line-height:1.15;overflow-wrap:anywhere;opacity:.9;flex:none}
 .chip-note{color:var(--karashi);font-weight:600;font-size:.8em;margin-top:.1em;
   overflow:hidden;white-space:nowrap;text-overflow:ellipsis;min-width:0}
 .chip.two-line .chip-note{display:none}
@@ -892,12 +893,19 @@ function openMoreDlg(entries,no){
   dlg.showModal();
 }
 
-function seatEl(no){
+function seatEl(arg,jumpEntryIds){
+  const nos=Array.isArray(arg)?arg:[arg];
+  const count=nos.length;
+  const isMerged=count>1;
+  const minNo=String(Math.min(...nos.map(Number)));
+  const sortedNos=nos.slice().sort((a,b)=>Number(a)-Number(b));
   const b=document.createElement('button');
-  b.dataset.no=no;
-  b.dataset.g=ROWS.findIndex(r=>r.nos.includes(no)); // 席の種類ごとの色分け（臨時席は-1で色なし）
+  b.dataset.no=minNo;
+  b.dataset.nos=nos.join(',');
+  b.dataset.g=ROWS.findIndex(r=>r.nos.includes(minNo)); // 席の種類ごとの色分け（臨時席は-1で色なし）
+  b.style.flexGrow=String(count);
   const isToday=date===today();
-  const here=db.entries.filter(e=>e.date===date&&!e.cancelled&&!e.gone&&e.tables.includes(no));
+  const here=db.entries.filter(e=>e.date===date&&!e.cancelled&&!e.gone&&e.tables.includes(minNo));
   // 青は「来店済みの予約がこの卓にあるか」で決める。
   const used=here.some(e=>e.arrived);
   const hasArrived=isToday&&used;
@@ -906,7 +914,7 @@ function seatEl(no){
   b.className='seat'+(used&&isToday?' used':'')+(hasNext?' has-next':'')+(hasRes?' has-res':'');
   const nextBadge=hasNext?'<span class="badge next">次</span>':'';
   b.innerHTML=`<div class="no"><span></span>${used&&isToday?'<em>使用中</em>':''}${nextBadge}</div><div class="as"></div>`;
-  b.querySelector('.no span').textContent=no;
+  b.querySelector('.no span').textContent=sortedNos.join('・');
   const as=b.querySelector('.as');
   if(here.length===0){
     const emptyEl=document.createElement('div');
@@ -916,6 +924,11 @@ function seatEl(no){
   } else {
     // チップの並び: 来店済みを上、「次」を下にする（here を arrived 優先で並べてから slice(0,2)）
     here.sort((a,b)=>(b.arrived?1:0) - (a.arrived?1:0));
+    const topMulti=here.find(e=>e.tables.length>1);
+    if(topMulti&&jumpEntryIds&&here.some(e=>jumpEntryIds.has(e.id))){
+      b.style.outline=`3px solid ${color(topMulti.id)}`;
+      b.style.outlineOffset='-3px';
+    }
     here.slice(0,2).forEach(e=>{
       const isNext=hasArrived&&!e.arrived;
       const isWait=e.kind==='wait';
@@ -941,6 +954,13 @@ function seatEl(no){
       }
       c.querySelector('.chip-name').textContent=e.name;
       c.querySelector('.chip-people').textContent=peopleText(e);
+      if(!isMerged&&e.tables.length>1){
+        const sortedTbls=e.tables.slice().sort((x,y)=>Number(x)-Number(y));
+        const tblsSpan=document.createElement('span');
+        tblsSpan.className='chip-tbls';
+        tblsSpan.textContent=`卓${sortedTbls.join('・')}`;
+        c.appendChild(tblsSpan);
+      }
       if(e.time){const time=document.createElement('span');time.className='chip-time';time.textContent=e.time;c.querySelector('.chip-meta').appendChild(time)}
       const note1=(e.note||'').split('\n')[0].trim();
       if(note1){const n=document.createElement('div');n.className='chip-note';n.textContent=note1;c.appendChild(n)}
@@ -975,11 +995,11 @@ function seatEl(no){
           c.appendChild(timersDiv);
         }
       }
-      c.dataset.entryId=e.id;c.dataset.from=no;
+      c.dataset.entryId=e.id;c.dataset.from=minNo;
       c.setAttribute('aria-label',`${e.name} を卓または保留へドラッグ`);
-      bindDrag(c,{type:'move',entryId:e.id,from:no},e.name);
+      bindDrag(c,{type:'move',entryId:e.id,from:minNo,merged:isMerged},e.name);
       // チップのどこをタップしても状態ボタン画面を開く
-      c.onclick=ev=>{ev.stopPropagation();openActDlg(e,no)};
+      c.onclick=ev=>{ev.stopPropagation();openActDlg(e,minNo)};
       as.appendChild(c);
     });
     if(here.length>2){
@@ -987,32 +1007,64 @@ function seatEl(no){
       more.style.cursor='pointer';
       more.onclick=ev=>{
         ev.stopPropagation();
-        openMoreDlg(here,no);
+        openMoreDlg(here,minNo);
       };
       as.appendChild(more);
     }
   }
   // 卓マスのチップ以外をタップ：予約入力が開く（空席タップで使用中の切り替えはしない）
-  b.onclick=()=>openForm('res',null,date,no);
+  b.onclick=()=>openForm('res',null,date,minNo);
   return b;
 }
 
 function drawMap(){
   const m=document.getElementById('map');m.innerHTML='';
-  const zashiki=document.createElement('div');zashiki.className='zashiki-column';
-  ROWS[0].nos.forEach(no=>zashiki.appendChild(seatEl(no)));
-  m.appendChild(zashiki);
-  const main=document.createElement('div');main.className='main-map';
+  const getHere=no=>db.entries.filter(e=>e.date===date&&!e.cancelled&&!e.gone&&e.tables.includes(no));
+  const isMultiOnly=here=>here.length>0&&here.every(e=>e.tables.length>1);
+  const sig=here=>JSON.stringify(here.map(e=>e.id).sort());
+  const groupRow=nos=>{
+    const groups=[];let cur=[],curSig=null;
+    for(const no of nos){
+      const here=getHere(no);
+      const multi=isMultiOnly(here);
+      const s=multi?sig(here):null;
+      if(cur.length>0){
+        if(s!==null&&s===curSig){cur.push(no);continue}
+        else{groups.push(cur);cur=[];curSig=null}
+      }
+      cur.push(no);curSig=s;
+    }
+    if(cur.length>0) groups.push(cur);
+    return groups;
+  };
+  const zashikiGroups=groupRow(ROWS[0].nos);
   const rows=ROWS.slice(1);
   const ex=extraOf(date); if(ex.length) rows.push({lab:'追加',nos:ex,extra:true});
-  rows.forEach(r=>{
+  const mainGroups=rows.map(r=>({lab:r.lab,extra:r.extra,groups:groupRow(r.nos)}));
+  const allGroups=[...zashikiGroups,...mainGroups.flatMap(r=>r.groups)];
+  const jumpEntryIds=new Set();
+  db.entries.forEach(e=>{
+    if(e.date===date&&!e.cancelled&&!e.gone&&e.tables.length>1){
+      const cnt=allGroups.filter(g=>g.some(no=>e.tables.includes(no))).length;
+      if(cnt>1) jumpEntryIds.add(e.id);
+    }
+  });
+
+  const zashiki=document.createElement('div');zashiki.className='zashiki-column';
+  zashikiGroups.forEach(grp=>zashiki.appendChild(seatEl(grp,jumpEntryIds)));
+  m.appendChild(zashiki);
+
+  const main=document.createElement('div');main.className='main-map';
+  mainGroups.forEach(r=>{
     const row=document.createElement('div');row.className='row';row.setAttribute('aria-label',r.lab);
-    r.nos.forEach(no=>{
-      const s=seatEl(no);
+    r.groups.forEach(grp=>{
+      const s=seatEl(grp,jumpEntryIds);
       if(r.extra){
-        const wrap=document.createElement('div');wrap.className='extra';wrap.appendChild(s);
-        const del=document.createElement('button');del.className='extra-del';del.textContent='×';
-        del.setAttribute('aria-label',`追加席 ${no} を削除`);del.onclick=()=>delExtra(no);wrap.appendChild(del);
+        const wrap=document.createElement('div');wrap.className='extra';wrap.style.flexGrow=String(grp.length);wrap.appendChild(s);
+        grp.forEach(no=>{
+          const del=document.createElement('button');del.className='extra-del';del.textContent='×';
+          del.setAttribute('aria-label',`追加席 ${no} を削除`);del.onclick=()=>delExtra(no);wrap.appendChild(del);
+        });
         row.appendChild(wrap);
       } else row.appendChild(s);
     });
@@ -1343,7 +1395,27 @@ function endDrag(ev){
   if(!drag&&pendingDrag&&ev.pointerId===pendingDrag.pointerId){pendingDrag=null;return}
   if(!drag||ev.pointerId!==drag.pointerId) return;
   const state=drag, seat=dragSeat(ev), list=dragList(ev), no=seat&&seat.dataset.no, e=byId(state.entryId);
-  let changed=e&&(no?(state.type==='add'?assignTables(e,[no]):moveTable(e,state.from,no)):state.type==='move'&&list&&unassign(e));
+  let changed=false;
+  if(e&&state.merged){
+    if(no&&no!==state.from){
+      const allRows=ROWS.map(r=>r.nos);
+      const ex=extraOf(date); if(ex.length) allRows.push(ex);
+      const targetRow=allRows.find(nos=>nos.includes(no));
+      const idx=targetRow?targetRow.indexOf(no):-1;
+      const k=e.tables.length;
+      if(idx>=0&&idx+k<=targetRow.length){
+        const newTables=targetRow.slice(idx,idx+k);
+        changed=e&&assignTables(e,newTables);
+      } else {
+        const h=document.getElementById('hint');
+        if(h) h.textContent='ここには入りきりません。編集で卓を選んでください';
+      }
+    } else if(state.type==='move'&&list){
+      changed=e&&unassign(e);
+    }
+  } else {
+    changed=e&&(no?(state.type==='add'?assignTables(e,[no]):moveTable(e,state.from,no)):state.type==='move'&&list&&unassign(e));
+  }
   clearDrag();
   if(changed){
     save();draw();
@@ -2220,7 +2292,7 @@ if(location.search.includes('test=1')) (async()=>{
   check(!!btnArrive,'今日かつ!arrivedのとき「使用中にする」ボタンが表示される');
   btnArrive.click();
   check(actRes.arrived&&occOf(today()).includes('4')&&occOf(today()).includes('5'),'完了条件6: 使用中にするでarrived=trueかつ全卓がoccに入る');
-  check(document.querySelector('.seat[data-no="4"]').classList.contains('used')&&document.querySelector('.seat[data-no="5"]').classList.contains('used'),'完了条件6: 全卓が.seat.usedになる');
+  check(['4','5'].every(no=>[...document.querySelectorAll('#map .seat')].some(b=>b.dataset.nos.split(',').includes(no)&&b.classList.contains('used'))),'完了条件6: 全卓が.seat.usedになる');
   // 再度チップをクリックして食事終了
   const actChip2=document.querySelector('.chip[data-entry-id="act-res"]');
   actChip2.click();
@@ -2927,7 +2999,7 @@ if(location.search.includes('test=1')) (async()=>{
   const f8Entry = entry('f8-entry', 'F8客', ['1', '2']);
   db.entries.push(f8Entry); draw();
   const f8Chip1 = document.querySelector('.seat[data-no="1"] .chip[data-entry-id="f8-entry"]');
-  const f8Seat2 = document.querySelector('.seat[data-no="2"]');
+  const f8Seat2 = [...document.querySelectorAll('#map .seat')].find(b=>b.dataset.nos.split(',').includes('2'));
   dragFromTo(f8Chip1, f8Seat2);
   check(f8Entry.tables.length === 2 && f8Entry.tables.includes('1') && f8Entry.tables.includes('2') && !f8Entry.tables.every(t => t === '2'), 'F8: 複数卓のチップを同予約の別卓へ動かしても移動せず重複しない');
 
@@ -3350,6 +3422,162 @@ if(location.search.includes('test=1')) (async()=>{
     check($('bookGrid').querySelector(`.day.today[data-date="${today()}"]`),'予約帳: 「今月へ」で今日のある月に戻る');
     $('bookBtn').click();
     db.entries=db.entries.filter(e=>!['bk-1','bk-2'].includes(e.id)&&e.name!=='予約帳から作成');
+  }
+
+  /* === バッチ7.5: 複数卓の予約を見やすく === */
+  {
+    const origEntries=db.entries.slice(), origExtra=db.extra.slice();
+    date=today(); view='seat';
+    const normColor=c=>{const d=document.createElement('div');d.style.color=c;return d.style.color};
+    const counterNos=ROWS.find(r=>r.lab==='カウンター').nos;
+    const c1=counterNos[0], c2=counterNos[1], c3=counterNos[2];
+    const cSorted=[c1,c2,c3].slice().sort((a,b)=>Number(a)-Number(b));
+    const minC=String(Math.min(...cSorted.map(Number)));
+    const cLabel=cSorted.join('・');
+    const mk=(id,name,tables,arrived=false)=>{
+      $('addRes').click();
+      $('frm').name.value=name;$('frm').tables.value=tables.join(',');
+      $('frm').querySelector('button[value="ok"]').click();
+      const e=db.entries.find(x=>x.name===name);
+      check(e&&e.tables.length===tables.length,`7.5: フォーム保存で${name}の全卓を割り当てる`);
+      e.id=id;save();draw(); // テストの枠色とチップを固定IDで照合する
+      if(arrived){
+        document.querySelector(`.chip[data-entry-id="${id}"]`).click();
+        $('actBtns').querySelector('button.on').click();
+      }
+      return e;
+    };
+    db.entries=[];db.extra=[];db.occ={};save();draw();
+
+    // 0. 本番フォームクリック経路での複数卓予約作成補助
+    $('addRes').click();
+    check($('dlg').open,'7.5: フォームを開いて予約作成');
+    $('frm').name.value='フォーム客';
+    $('frm').tables.value=`${c1}, ${c2}, ${c3}`;
+    $('frm').querySelector('button[value="ok"]').click();
+    const resA=db.entries.find(e=>e.name==='フォーム客');
+    check(resA&&resA.tables.length===3,'7.5: フォームクリック経路で3卓予約が作成される');
+
+    // 1. カウンター連続3席の予約 -> 1つのマス、番号昇順、チップ1つ
+    const seatA=document.querySelector(`.seat[data-no="${minC}"]`);
+    check(seatA&&seatA.style.flexGrow==='3','7.5: 連続3席は1マスにまとまりflex-growが3');
+    check(seatA&&seatA.querySelector('.no span').textContent===cLabel,'7.5: マスの番号表示は昇順');
+    const chipsA=seatA?seatA.querySelectorAll('.chip'):[];
+    check(chipsA.length===1&&chipsA[0].dataset.entryId===resA.id,'7.5: チップは1つだけ出る');
+    check(!seatA.style.outline,'7.5: まとまったマスに飛び番outlineは付かない');
+
+    // 2. 飛び番の予約 -> 2マスに同じ色の枠、チップに全卓番文字
+    const resB=mk('t75-b','飛び客',[c1,c3]);
+    db.entries=[resB]; save(); draw();
+    const seatB1=document.querySelector(`.seat[data-no="${c1}"]`);
+    const seatB3=document.querySelector(`.seat[data-no="${c3}"]`);
+    const bSorted=[c1,c3].slice().sort((a,b)=>Number(a)-Number(b)).join('・');
+    check(seatB1&&seatB3&&seatB1!==seatB3,'7.5: 飛び番は別々のマスになる');
+    check(seatB1.style.outline.includes(normColor(color(resB.id)))&&seatB3.style.outline.includes(normColor(color(resB.id))),'7.5: 飛び番の各マスに予約の色のoutlineが付く');
+    const chipB1=seatB1.querySelector('.chip');
+    check(chipB1&&chipB1.textContent.includes(`卓${bSorted}`),'7.5: 非まとめチップに全卓番が文字で出る');
+
+    // 3. 2卓目に別の予約が重なったらまとまらない
+    const resC1=mk('t75-c1','予約一',[c1,c2,c3]);
+    const resC2=mk('t75-c2','予約二',[c2]);
+    db.entries=[resC1,resC2]; save(); draw();
+    const seatC1=document.querySelector(`.seat[data-no="${c1}"]`);
+    const seatC2=document.querySelector(`.seat[data-no="${c2}"]`);
+    check(seatC1&&seatC2&&seatC1!==seatC2,'7.5: 2卓目に別の予約が重なったらまとまらない');
+
+    // 4. まとめたマスのチップから席へドラッグ（足りる場合）: ROWSからターゲットと期待席を導く
+    db.entries=[resA]; save(); draw();
+    const targetIdx=counterNos.length-3;
+    const targetNo=counterNos[targetIdx];
+    const expectedTables=counterNos.slice(targetIdx,targetIdx+3).slice().sort((a,b)=>Number(a)-Number(b));
+    const dragChipA=document.querySelector(`.seat[data-no="${minC}"] .chip[data-entry-id="${resA.id}"]`);
+    const targetSeat=document.querySelector(`.seat[data-no="${targetNo}"]`);
+    dragFromTo(dragChipA,targetSeat);
+    check(JSON.stringify(resA.tables.slice().sort((a,b)=>Number(a)-Number(b)))===JSON.stringify(expectedTables),'7.5: まとめチップを席へドラッグすると画面順で席数ぶん移る');
+
+    // 5. 入りきらない席へドラッグ（足りない場合）: 元の先頭3席に戻し段末の独立した席へ
+    resA.tables=[c1,c2,c3]; save(); draw();
+    const overflowNo=counterNos[counterNos.length-1];
+    const prevTables=resA.tables.slice();
+    const dragChipA2=document.querySelector(`.seat[data-no="${minC}"] .chip[data-entry-id="${resA.id}"]`);
+    const overflowSeat=document.querySelector(`.seat[data-no="${overflowNo}"]`);
+    dragFromTo(dragChipA2,overflowSeat);
+    check(JSON.stringify(resA.tables)===JSON.stringify(prevTables),'7.5: 入りきらない席へドラッグしても変わらない');
+    check($('hint').textContent.includes('ここには入りきりません'),'7.5: 入りきらないとき指定のヒントが出る');
+
+    // 6. まとめたマスのチップを保留一覧へドラッグ（割り当て解除）
+    const dragChipA3=document.querySelector(`.seat[data-no="${minC}"] .chip[data-entry-id="${resA.id}"]`);
+    dragFromTo(dragChipA3,$('resList'));
+    check(resA.tables.length===0,'7.5: 保留一覧へドラッグで割り当て解除');
+
+    // 7. 同じ組合せの複数予約が1マスにまとまり、1チップだけ動かして他予約が残る
+    const resD1=mk('t75-d1','予約D1',[c1,c2],false);
+    const resD2=mk('t75-d2','予約D2',[c1,c2],true);
+    db.entries=[resD1,resD2]; save(); draw();
+    const minD=String(Math.min(Number(c1),Number(c2)));
+    const seatD=document.querySelector(`.seat[data-no="${minD}"]`);
+    check(seatD&&seatD.style.flexGrow==='2','7.5: 同じ組合せの複数予約も1マスにまとまる');
+    check(seatD&&seatD.querySelectorAll('.chip').length===2,'7.5: まとめたマスに複数予約のチップが並ぶ');
+    const dragChipD1=document.querySelector(`.chip[data-entry-id="t75-d1"]`);
+    dragFromTo(dragChipD1,$('resList'));
+    check(resD1.tables.length===0,'7.5: 同じ卓組の2予約から1チップだけ解除できる');
+    check(JSON.stringify(resD2.tables.slice().sort((a,b)=>Number(a)-Number(b)))===JSON.stringify([c1,c2].slice().sort((a,b)=>Number(a)-Number(b))),'7.5: もう一方の予約は元の卓に残る');
+
+    check(seatD.classList.contains('used')&&seatD.classList.contains('has-next'),'7.5: まとめマスも使用中の青と次の札を保つ');
+
+    // 8. 部分連続予約も全卓数（e.tables.length）で席へ移る
+    const cPartJump=counterNos[counterNos.length-1];
+    const resPart=mk('t75-part','部分客',[c1,c2,cPartJump]);
+    db.entries=[resPart]; save(); draw();
+    const dragPartChip=document.querySelector(`.seat[data-no="${minD}"] .chip[data-entry-id="t75-part"]`);
+    const partTargetSeat=document.querySelector(`.seat[data-no="${targetNo}"]`);
+    dragFromTo(dragPartChip,partTargetSeat);
+    check(JSON.stringify(resPart.tables.slice().sort((a,b)=>Number(a)-Number(b)))===JSON.stringify(expectedTables),'7.5: 部分連続予約も全卓数で席へ移る');
+
+    // 9. 優先色の確認: 来店済み優先でoutline
+    const resE1=mk('t75-e1','未着客',[c1,c3],false);
+    const resE2=mk('t75-e2','来店客',[c1,c3],true);
+    db.entries=[resE1,resE2]; save(); draw();
+    const seatE1=document.querySelector(`.seat[data-no="${c1}"]`);
+    check(seatE1&&seatE1.style.outline.includes(normColor(color(resE2.id))),'7.5: 飛び番複数予約のoutlineは来店済み優先');
+
+    // 上の予約は連続、下の予約だけ飛び番でも枠色は上のチップを優先する。
+    db.entries=[];save();draw();
+    const mixedTop=mk('t75-mixed-top','上の連続客',[c1,c2],true);
+    const mixedJump=mk('t75-mixed-jump','下の飛び客',[c1,c2,counterNos[counterNos.length-1]]);
+    db.entries=[mixedTop,mixedJump];save();draw();
+    const mixedSeat=document.querySelector(`.seat[data-no="${minD}"]`);
+    check(mixedSeat.style.outlineColor===normColor(color(mixedTop.id)),'7.5: 下の予約だけ飛び番でも枠色は上の複数卓予約');
+
+    // 10. タップで最小の卓番の予約入力が開く
+    const resF=mk('t75-f','タップ客',[c1,c2]);
+    db.entries=[resF]; save(); draw();
+    const seatF=document.querySelector(`.seat[data-no="${minD}"]`);
+    seatF.click();
+    check($('dlg').open&&$('frm').querySelector('h3').textContent.includes('予約：卓 '+minD+'（'),'7.5: まとめマスのタップで最小卓番の予約入力が開く');
+    $('frm').querySelector('button[value="cancel"]').click();
+
+    // 11. 座敷（縦列）でのまとめ
+    const zNos=ROWS.find(r=>r.lab==='座敷').nos;
+    const resZ=mk('t75-z','座敷客',[zNos[0],zNos[1]]);
+    db.entries=[resZ]; save(); draw();
+    const minZ=String(Math.min(Number(zNos[0]),Number(zNos[1])));
+    const seatZ=document.querySelector(`.zashiki-column .seat[data-no="${minZ}"]`);
+    check(seatZ&&seatZ.style.flexGrow==='2','7.5: 座敷（縦列）でも連続席がまとまる');
+
+    // 12. 追加席行でのまとめ
+    const ex1='98', ex2='99';
+    addExtra(date,ex1); addExtra(date,ex2);
+    const resEx=mk('t75-ex','追加席客',[ex1,ex2]);
+    db.entries=[resEx]; save(); draw();
+    const minEx=String(Math.min(Number(ex1),Number(ex2)));
+    const seatEx=document.querySelector(`.extra .seat[data-no="${minEx}"]`);
+    check(seatEx&&seatEx.style.flexGrow==='2','7.5: 追加席行でも連続席が1マスにまとまりflex-growが2');
+
+    check(document.querySelectorAll('.extra-del').length===2,'7.5: まとめた追加席でも各卓の削除ボタンを保つ');
+
+    // 後片付け
+    db.entries=origEntries; db.extra=origExtra; save(); draw();
   }
 
   db=JSON.parse(bk);date=oldDate;weekStart=oldWeekStart;save();draw();
