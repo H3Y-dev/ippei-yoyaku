@@ -275,6 +275,12 @@ form.f .message{grid-column:1/-1;margin:0;color:var(--enji-label);font-size:.85e
 #actTimers button:active{background:var(--ash)}
 #actTimers button.cancel{color:var(--enji-label);border-color:var(--enji-label)}
 #actTimers .timer-custom-row{display:flex;gap:4px;align-items:center;margin-top:2px}
+.tbl-picker{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.btn-tbl{min-height:36px;padding:.2em .6em;border-radius:6px;border:1px solid var(--ash);background:var(--sumi);color:var(--kinari);font-size:.9em;display:inline-flex;flex-direction:column;align-items:center;justify-content:center}
+.btn-tbl.on{background:var(--ao);border-color:#6FA8EC;color:#fff;font-weight:700}
+.btn-tbl-cand{background:rgba(255,255,255,.05);border:1px dashed var(--ash);color:var(--kinari)}
+.btn-tbl-cand:active{background:var(--ash)}
+.tbl-cand-status{font-size:.72em;opacity:.85;line-height:1;margin-top:2px}
 </style>
 </head>
 <body>
@@ -438,6 +444,7 @@ function normalizeDb(d){
         e.children = (c >= 1 && c <= e.people) ? c : 0;
       }
       e.nomiStart = (typeof e.nomiStart === 'number' && Number.isFinite(e.nomiStart)) ? e.nomiStart : null;
+      e.nomiExtra = (typeof e.nomiExtra === 'number' && Number.isInteger(e.nomiExtra) && e.nomiExtra >= 0) ? e.nomiExtra : 0;
       e.limitEnd = (typeof e.limitEnd === 'number' && Number.isFinite(e.limitEnd)) ? e.limitEnd : null;
       e.tables = Array.isArray(e.tables) ? [...new Set(e.tables.map(String))] : [];
       e.arrived = Boolean(e.arrived);
@@ -648,16 +655,19 @@ const NOMI_WARN_MIN=15;
 
 function getNomiInfo(e){
   if(!e.nomiStart) return null;
+  const extra = (typeof e.nomiExtra === 'number' && Number.isInteger(e.nomiExtra) && e.nomiExtra > 0) ? e.nomiExtra : 0;
+  const totalMin = NOMI_MIN + extra;
+  const extSuffix = extra > 0 ? `（延長${extra}分）` : '';
   const elapsedMs = nowMs() - e.nomiStart;
   const elapsedMin = Math.floor(elapsedMs / 60000);
-  if(elapsedMin >= NOMI_MIN){
-    return {stage: 3, cls: 'badge nomi-alert', text: 'ラストオーダー'};
-  } else if(elapsedMin >= NOMI_MIN - NOMI_WARN_MIN){
-    const remMin = Math.max(0, NOMI_MIN - elapsedMin);
-    return {stage: 2, cls: 'badge nomi-warn', text: `まもなくラストオーダー あと${remMin}分`};
+  if(elapsedMin >= totalMin){
+    return {stage: 3, cls: 'badge nomi-alert', text: `ラストオーダー${extSuffix}`, extra, remMin: 0};
+  } else if(elapsedMin >= totalMin - NOMI_WARN_MIN){
+    const remMin = Math.max(0, totalMin - elapsedMin);
+    return {stage: 2, cls: 'badge nomi-warn', text: `まもなくラストオーダー あと${remMin}分${extSuffix}`, extra, remMin};
   } else {
-    const remMin = Math.max(0, NOMI_MIN - elapsedMin);
-    return {stage: 1, cls: 'badge nomi-normal', text: `飲み放題 あと${remMin}分`};
+    const remMin = Math.max(0, totalMin - elapsedMin);
+    return {stage: 1, cls: 'badge nomi-normal', text: `飲み放題 あと${remMin}分${extSuffix}`, extra, remMin};
   }
 }
 
@@ -1192,6 +1202,115 @@ function delExtra(no){
   setOcc(no,false);save();draw();
 }
 
+/* ---------- 卓選択ヘルパー (7.6) ---------- */
+function getTableRows(d = date){
+  const rows = ROWS.map(r => ({ lab: r.lab, nos: r.nos.slice() }));
+  const ex = extraOf(d);
+  if(ex.length){
+    rows.push({ lab: '追加', nos: ex.slice(), extra: true });
+  }
+  return rows;
+}
+function getTableOccStatus(no, d, excludeEntryId = null){
+  const entries = db.entries.filter(e =>
+    e.date === d &&
+    !e.cancelled &&
+    !e.gone &&
+    e.id !== excludeEntryId &&
+    e.tables.includes(String(no))
+  );
+  if(!entries.length) return null;
+  if(entries.some(e => e.arrived)) return '使用中';
+  return '予約あり';
+}
+function getAdjacentTableCandidates(selectedTables, d = date){
+  if(!selectedTables || !selectedTables.length) return [];
+  const rows = getTableRows(d);
+  const selSet = new Set(selectedTables.map(String));
+  const candSet = new Set();
+  for(const row of rows){
+    const selIndices = [];
+    row.nos.forEach((no, idx) => {
+      if(selSet.has(no)) selIndices.push(idx);
+    });
+    if(!selIndices.length) continue;
+    selIndices.forEach(idx => {
+      if(idx > 0){
+        const left = row.nos[idx - 1];
+        if(!selSet.has(left)) candSet.add(left);
+      }
+      if(idx < row.nos.length - 1){
+        const right = row.nos[idx + 1];
+        if(!selSet.has(right)) candSet.add(right);
+      }
+    });
+  }
+  return Array.from(candSet);
+}
+function renderTablePicker(container, opts){
+  if(!container) return;
+  container.replaceChildren();
+  const selected = (opts.selected || []).map(String);
+  if(!selected.length) return;
+  const d = opts.date || date;
+  const rows = getTableRows(d);
+  const selSet = new Set(selected);
+  const cands = getAdjacentTableCandidates(selected, d);
+  const candSet = new Set(cands);
+
+  const renderedSet = new Set();
+  rows.forEach(row => {
+    row.nos.forEach(no => {
+      if(selSet.has(no)){
+        renderedSet.add(no);
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'btn-tbl on';
+        b.dataset.no = no;
+        b.setAttribute('aria-pressed', 'true');
+        b.textContent = no;
+        b.onclick = () => {
+          if(opts.selected.length > 1 && opts.onDeselect) opts.onDeselect(no);
+        };
+        container.appendChild(b);
+      } else if(candSet.has(no)){
+        renderedSet.add(no);
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'btn-tbl btn-tbl-cand';
+        b.dataset.no = no;
+        b.setAttribute('aria-pressed', 'false');
+        b.textContent = '＋' + no;
+        const occ = getTableOccStatus(no, d, opts.excludeEntryId);
+        if(occ){
+          const sm = document.createElement('small');
+          sm.className = 'tbl-cand-status';
+          sm.textContent = occ;
+          b.appendChild(sm);
+        }
+        b.onclick = () => {
+          if(opts.onSelect) opts.onSelect(no);
+        };
+        container.appendChild(b);
+      }
+    });
+  });
+  selected.forEach(no => {
+    if(!renderedSet.has(no)){
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'btn-tbl on';
+      b.dataset.no = no;
+      b.setAttribute('aria-pressed', 'true');
+      b.textContent = no;
+      b.onclick = () => {
+        if(opts.selected.length > 1 && opts.onDeselect) opts.onDeselect(no);
+      };
+      container.appendChild(b);
+    }
+  });
+}
+
 /* ---------- 状態ダイアログ (#actDlg) ---------- */
 function openActDlg(e,no){
   const dlg=$('actDlg'), title=$('actTitle'), stateEl=$('actState'), box=$('actBtns'), timersEl=$('actTimers');
@@ -1229,7 +1348,7 @@ function openActDlg(e,no){
       b.type='button';
       b.id='btnNomiStart';
       b.textContent='飲み放題を始める（90分）';
-      b.onclick=()=>{dlg.close();e.nomiStart=nowMs();save();draw()};
+      b.onclick=()=>{dlg.close();e.nomiStart=nowMs();e.nomiExtra=0;save();draw()};
       secNomi.appendChild(b);
     } else {
       const b=document.createElement('button');
@@ -1237,8 +1356,57 @@ function openActDlg(e,no){
       b.id='btnNomiCancel';
       b.className='cancel';
       b.textContent='飲み放題を取り消す';
-      b.onclick=()=>{dlg.close();e.nomiStart=null;save();draw()};
+      b.onclick=()=>{dlg.close();e.nomiStart=null;e.nomiExtra=0;save();draw()};
       secNomi.appendChild(b);
+
+      const extraLab=document.createElement('div');
+      extraLab.className='timer-lab';
+      const curExtra=(typeof e.nomiExtra==='number'&&e.nomiExtra>0)?e.nomiExtra:0;
+      extraLab.textContent=curExtra>0?`延長 合計${curExtra}分`:'延長';
+      secNomi.appendChild(extraLab);
+
+      const extRow=document.createElement('div');
+      extRow.className='timer-row';
+      [15,30,60].forEach(m=>{
+        const eb=document.createElement('button');
+        eb.type='button';
+        eb.className='btn-nomi-ext';
+        eb.textContent=`${m}分`;
+        eb.onclick=()=>{
+          dlg.close();
+          e.nomiExtra=(e.nomiExtra||0)+m;
+          save();
+          draw();
+        };
+        extRow.appendChild(eb);
+      });
+      const extOtherBtn=document.createElement('button');
+      extOtherBtn.type='button';
+      extOtherBtn.id='btnNomiExtOther';
+      extOtherBtn.textContent='ほか';
+      extRow.appendChild(extOtherBtn);
+      secNomi.appendChild(extRow);
+
+      const extCustomRow=document.createElement('div');
+      extCustomRow.className='timer-custom-row';
+      extCustomRow.style.display='none';
+      extCustomRow.innerHTML=`<input type="number" name="nomiExtraCustom" min="1" max="600" aria-label="延長する分数" style="width:4.5em" placeholder="分"><button type="button" id="btnNomiExtCustomOk" style="min-height:34px">延長する</button>`;
+      const extCustomInput=extCustomRow.querySelector('input');
+      const extCustomOk=extCustomRow.querySelector('#btnNomiExtCustomOk');
+      extOtherBtn.onclick=()=>{
+        extCustomRow.style.display='flex';
+        extCustomInput.focus();
+      };
+      extCustomOk.onclick=()=>{
+        const val=Number(extCustomInput.value);
+        if(Number.isInteger(val) && val>=1 && val<=600){
+          dlg.close();
+          e.nomiExtra=(e.nomiExtra||0)+val;
+          save();
+          draw();
+        }
+      };
+      secNomi.appendChild(extCustomRow);
     }
     timersEl.appendChild(secNomi);
 
@@ -1614,7 +1782,7 @@ function openForm(kind,e,forDate,seatNo){
    ${isSeat?'':'<label>電話待ち</label><input type="checkbox" name="wait" autocomplete="off" style="width:auto;justify-self:start" '+(isWaitInitial?'checked':'')+'>'}
    <label>電話番号<span class="tel-req" ${isWaitInitial?'':'hidden'}>*</span></label><input name="tel" type="tel" inputmode="tel" autocomplete="off" ${isWaitInitial?'required':''}>
    <label>要望</label><textarea name="note" rows="2" autocomplete="off" autocorrect="off" spellcheck="false"></textarea>
-   ${isSeat?'':'<label>卓</label><input name="tables" autocomplete="off" placeholder="空欄なら卓未定">'}
+   ${isSeat?'<label>卓</label><div id="fTblPicker" class="tbl-picker"></div>':'<label>卓</label><input name="tables" autocomplete="off" placeholder="空欄なら卓未定">'}
    ${isSeat?'':'<label>日付</label><input name="date" type="date" required>'}
    <p class="message" hidden></p>
    <div class="wide">
@@ -1622,15 +1790,42 @@ function openForm(kind,e,forDate,seatNo){
      <button value="cancel" type="submit" formnovalidate>閉じる</button>
    </div>`;
 
+  let curSeatTables = isSeat ? [String(seatNo)] : [];
   const saveBtn = f.querySelector('#frmSaveBtn');
   const updateSaveBtnLabel = () => {
     if(isSeat){
       const nv = f.name.value.trim();
-      saveBtn.textContent = (isToday && !nv) ? '来店客として使用中にする' : `卓${seatNo}に予約する`;
+      const tblListStr = curSeatTables.slice().sort((a,b)=>Number(a)-Number(b)).join('・');
+      saveBtn.textContent = (isToday && !nv) ? '来店客として使用中にする' : `卓${tblListStr}に予約する`;
     } else {
       saveBtn.textContent = '卓未定で保存';
     }
   };
+
+  const renderFormTblPicker = () => {
+    const box = f.querySelector('#fTblPicker');
+    if(!box) return;
+    renderTablePicker(box, {
+      selected: curSeatTables,
+      date: d,
+      excludeEntryId: e?.id || null,
+      onSelect: (candNo) => {
+        if(!curSeatTables.includes(candNo)){
+          curSeatTables.push(candNo);
+          renderFormTblPicker();
+          updateSaveBtnLabel();
+        }
+      },
+      onDeselect: (selNo) => {
+        if(curSeatTables.length > 1){
+          curSeatTables = curSeatTables.filter(x => x !== selNo);
+          renderFormTblPicker();
+          updateSaveBtnLabel();
+        }
+      }
+    });
+  };
+  if(isSeat) renderFormTblPicker();
 
   const adultInit = (e && e.people !== null && e.people !== undefined) ? Math.max(0, e.people - (e.children || 0)) : null;
   const peoplePick = createPeoplePicker(adultInit, f.people);
@@ -1687,7 +1882,7 @@ function openForm(kind,e,forDate,seatNo){
       // 卓の検証（F4, F15）
       let parsedTables = [];
       if(isSeat){
-        parsedTables = [seatNo];
+        parsedTables = curSeatTables.slice().sort((a,b)=>Number(a)-Number(b));
       } else {
         const tblInput = normalizeDigits(f.tables ? f.tables.value : '');
         if(tblInput){
@@ -1722,7 +1917,7 @@ function openForm(kind,e,forDate,seatNo){
       const finalChildren=adultVal!==null?childVal:0;
 
       // 全検査が通ってから代入（F5）
-      const o=e||{id:uid(),date:targetD,kind:chosenKind,tables:[],nomiStart:null,limitEnd:null,arrived:false,gone:false,called:false,cancelled:false};
+      const o=e||{id:uid(),date:targetD,kind:chosenKind,tables:[],nomiStart:null,nomiExtra:0,limitEnd:null,arrived:false,gone:false,called:false,cancelled:false};
       if(chosenKind==='wait' && (!e || e.kind!=='wait')){
         o.called=false;
       }
@@ -1737,10 +1932,10 @@ function openForm(kind,e,forDate,seatNo){
 
       if(isSeat){
         if(!e) db.entries.push(o);
-        assignTables(o,[seatNo],targetD);
+        assignTables(o,parsedTables,targetD);
         if(walkIn){
           o.arrived=true;
-          setOcc(seatNo,true);
+          parsedTables.forEach(t=>setOcc(t,true));
         }
       } else {
         if(parsedTables.length>0){
@@ -1765,7 +1960,8 @@ function openEdit(e,no){
    <label>時間</label><div id="editTimePicker"></div><input type="hidden" name="time" autocomplete="off">
    <label>電話番号</label><input name="tel" type="tel" inputmode="tel" autocomplete="off">
    <label>要望</label><textarea name="note" rows="2" autocomplete="off" autocorrect="off" spellcheck="false"></textarea>
-   <label>卓の変更・複数卓</label><input name="tables" autocomplete="off" placeholder="例: 1, 2, 3">
+   <label>卓</label><div id="editTblPicker" class="tbl-picker"></div>
+   <label>番号で入力（離れた席など）</label><input name="tables" autocomplete="off" placeholder="例: 1, 2, 3">
    <p class="message" hidden></p>
    <div class="wide">
      <button value="save" type="submit" class="on">保存</button>
@@ -1784,6 +1980,38 @@ function openEdit(e,no){
 
   for(const k of['name','tel','note']) f[k].value=e[k]??'';
   f.tables.value=e.tables.join(', ');
+  const parseEditTables = () => {
+    const raw = normalizeDigits(f.tables ? f.tables.value : '');
+    return raw ? [...new Set(raw.split(/[、,・\s]+/).filter(Boolean))] : [];
+  };
+  const renderEditTblPicker = () => {
+    const box = f.querySelector('#editTblPicker');
+    if(!box) return;
+    const cur = parseEditTables();
+    renderTablePicker(box, {
+      selected: cur,
+      date: e.date,
+      excludeEntryId: e.id,
+      onSelect: (candNo) => {
+        const curTables = parseEditTables();
+        if(!curTables.includes(candNo)){
+          curTables.push(candNo);
+          f.tables.value = curTables.sort((a,b)=>Number(a)-Number(b)).join(', ');
+          renderEditTblPicker();
+        }
+      },
+      onDeselect: (selNo) => {
+        const curTables = parseEditTables();
+        if(curTables.length > 1){
+          const next = curTables.filter(x => x !== selNo);
+          f.tables.value = next.sort((a,b)=>Number(a)-Number(b)).join(', ');
+          renderEditTblPicker();
+        }
+      }
+    });
+  };
+  renderEditTblPicker();
+  f.tables.oninput = () => { renderEditTblPicker(); };
   f.onkeydown=ev=>{if(ev.key==='Enter'&&ev.isComposing) ev.preventDefault()};
   const message=f.querySelector('.message');
   f.onsubmit=ev=>{
@@ -2149,7 +2377,7 @@ if(location.search.includes('test=1')) (async()=>{
   let checks=0;
   const check=(ok,label)=>{console.assert(ok,label);if(!ok)throw new Error(`自己チェック失敗: ${label}`);checks++};
   try{
-    const entry=(id,name,tables=[])=>({id,date:today(),kind:'res',name,tables,people:null,children:0,nomiStart:null,limitEnd:null,time:'',tel:'',note:'',arrived:false,gone:false,called:false,cancelled:false});
+    const entry=(id,name,tables=[])=>({id,date:today(),kind:'res',name,tables,people:null,children:0,nomiStart:null,nomiExtra:0,limitEnd:null,time:'',tel:'',note:'',arrived:false,gone:false,called:false,cancelled:false});
     db={entries:[],extra:[],occ:{},fs:17}; date=today();
 
   /* === 27章 完了条件1: 削った要素がDOMに無い === */
@@ -3508,6 +3736,310 @@ if(location.search.includes('test=1')) (async()=>{
   dragFromTo(b74ArrivedChip, getB74TargetBtn());
   check(b74Arrived.date === date && b74Arrived.tables.includes('10'), '7.4: 使用中の予約は日付が変わらない');
   check($('hint').textContent === '使用中の予約は日付を変えられません', '7.4: 使用中の予約は日付変更不可のヒントが出る');
+  /* === バッチ7: 7.2b 飲み放題の延長 === */
+  {
+    // バッチ4後にdateが未来日になっているので、今日・席画面に戻す
+    date = today();
+    weekStart = mondayOf(date);
+    view = 'seat';
+    draw();
+
+    // 7.2b-1: normalizeDb
+    const normTest = normalizeDb({
+      entries: [
+        { id: 'ne-1', date: today(), nomiExtra: undefined },
+        { id: 'ne-2', date: today(), nomiExtra: -10 },
+        { id: 'ne-3', date: today(), nomiExtra: 'abc' },
+        { id: 'ne-4', date: today(), nomiExtra: 30 }
+      ]
+    });
+    check(normTest.entries.find(e => e.id === 'ne-1').nomiExtra === 0, '7.2b: nomiExtra無しの古いデータは0');
+    check(normTest.entries.find(e => e.id === 'ne-2').nomiExtra === 0, '7.2b: 負のnomiExtraは0に正規化');
+    check(normTest.entries.find(e => e.id === 'ne-3').nomiExtra === 0, '7.2b: 数値以外のnomiExtraは0に正規化');
+    check(normTest.entries.find(e => e.id === 'ne-4').nomiExtra === 30, '7.2b: 正当なnomiExtraはそのまま');
+
+    // 7.2b-2: 予約作成〜使用中〜飲み放題開始
+    const testSeat = ROWS[0].nos[0];
+    const nEntry = {
+      id: 'nomi-ext-test',
+      date: today(),
+      kind: 'res',
+      name: '飲み放題延長客',
+      tables: [testSeat],
+      people: 2,
+      children: 0,
+      time: '18:00',
+      tel: '',
+      note: '',
+      arrived: true,
+      gone: false,
+      called: false,
+      cancelled: false,
+      nomiStart: null,
+      nomiExtra: 0,
+      limitEnd: null
+    };
+    db.entries.push(nEntry);
+    setOcc(testSeat, true);
+    save(); draw();
+
+    const origNowMs = nowMs;
+    const testStartTime = 1700000000000;
+    try {
+      nowMs = () => testStartTime;
+      const getLiveNomiChip = () => document.querySelector(`.seat[data-no="${testSeat}"] .chip[data-entry-id="${nEntry.id}"]`);
+      getLiveNomiChip().click();
+      const btnStart = $('actTimers').querySelector('#btnNomiStart');
+      check(!!btnStart, '7.2b: 状態画面に飲み放題開始ボタンが出る');
+      btnStart.click();
+      check(byId(nEntry.id).nomiStart === testStartTime && byId(nEntry.id).nomiExtra === 0, '7.2b: 開始でnomiStart設定・nomiExtraは0');
+
+      // 7.2b-3: 80分経過で「30分」延長を押す
+      nowMs = () => testStartTime + 80 * 60 * 1000;
+      draw();
+      getLiveNomiChip().click();
+      const btn30m = [...$('actTimers').querySelectorAll('.btn-nomi-ext')].find(b => b.textContent === '30分');
+      check(!!btn30m, '7.2b: 状態画面に「30分」延長ボタンが出る');
+      btn30m.click();
+      check(byId(nEntry.id).nomiExtra === 30, '7.2b: 30分延長でnomiExtra=30');
+      draw();
+      const chipBadge = document.querySelector(`.seat[data-no="${testSeat}"] .chip[data-entry-id="${nEntry.id}"] .badge.nomi-normal`);
+      check(chipBadge && chipBadge.textContent === '飲み放題 あと40分（延長30分）', '7.2b: 80分経過で30分延長→札が「飲み放題 あと40分（延長30分）」');
+
+      // 7.2b-4: 状態ボタン画面の表示（延長 合計30分）
+      getLiveNomiChip().click();
+      const extLab = $('actTimers').querySelector('.timer-lab');
+      check(extLab && extLab.textContent === '延長 合計30分', '7.2b: 状態画面に「延長 合計30分」と出る');
+      $('actDlg').close();
+
+      // 7.2b-5: 95分経過（赤相当）で「15分」延長→黄色（段階2、残り10分）に戻る
+      byId(nEntry.id).nomiExtra = 0;
+      nowMs = () => testStartTime + 95 * 60 * 1000;
+      draw();
+      const infoBefore = getNomiInfo(byId(nEntry.id));
+      check(infoBefore.stage === 3, '7.2b: 延長なし95分経過で段階3（赤）');
+      getLiveNomiChip().click();
+      const btn15m = [...$('actTimers').querySelectorAll('.btn-nomi-ext')].find(b => b.textContent === '15分');
+      btn15m.click();
+      check(byId(nEntry.id).nomiExtra === 15, '7.2b: 15分延長でnomiExtra=15');
+      const infoAfter = getNomiInfo(byId(nEntry.id));
+      check(infoAfter.stage === 2 && infoAfter.remMin === 10 && infoAfter.extra === 15, '7.2b: 95分経過で15分延長→段階2・残り10分・延長15分に戻る');
+
+      // 7.2b-6: 「ほか」で45を入れて延長→累積60分
+      getLiveNomiChip().click();
+      const btnOther = $('actTimers').querySelector('#btnNomiExtOther');
+      btnOther.click();
+      const customRow = $('actTimers').querySelector('.timer-custom-row');
+      check(customRow && customRow.style.display !== 'none', '7.2b: 「ほか」を押すと延長数字欄が出る');
+      const customInput = customRow.querySelector('input');
+      const customOk = customRow.querySelector('#btnNomiExtCustomOk');
+      customInput.value = '45';
+      customOk.click();
+      check(byId(nEntry.id).nomiExtra === 60, '7.2b: 「ほか」で45入力→nomiExtra=60に累積');
+
+      // 7.2b-7: 「ほか」に不正値（0や文字）→変わらない
+      getLiveNomiChip().click();
+      $('actTimers').querySelector('#btnNomiExtOther').click();
+      const cRow = $('actTimers').querySelector('.timer-custom-row');
+      const cInput = cRow.querySelector('input');
+      const cOk = cRow.querySelector('#btnNomiExtCustomOk');
+      cInput.value = '0';
+      cOk.click();
+      check(byId(nEntry.id).nomiExtra === 60, '7.2b: 0入力は無変更');
+      cInput.value = 'abc';
+      cOk.click();
+      check(byId(nEntry.id).nomiExtra === 60, '7.2b: 文字入力は無変更');
+      cInput.value = '601';
+      cOk.click();
+      check(byId(nEntry.id).nomiExtra === 60, '7.2b: 601（600超）入力は無変更');
+      cInput.value = '1.5';
+      cOk.click();
+      check(byId(nEntry.id).nomiExtra === 60, '7.2b: 小数入力は無変更');
+      $('actDlg').close();
+
+      // 7.2b-8: undo（元に戻す）で延長が戻る
+      $('undoBtn').click();
+      check(byId(nEntry.id).nomiExtra === 15, '7.2b: undoで直前の延長が取り消され戻る');
+
+      // 7.2b-9: 飲み放題取り消しでnomiExtra=0
+      getLiveNomiChip().click();
+      $('actTimers').querySelector('#btnNomiCancel').click();
+      check(byId(nEntry.id).nomiStart === null && byId(nEntry.id).nomiExtra === 0, '7.2b: 飲み放題取り消しでnomiStart=nullかつnomiExtra=0');
+
+    } finally {
+      nowMs = origNowMs;
+      db.entries = db.entries.filter(e => e.id !== 'nomi-ext-test');
+      setOcc(testSeat, false);
+      save(); draw();
+    }
+  }
+
+  /* === バッチ7: 7.6 複数卓の隣席候補 === */
+  {
+    const tblRow = ROWS.find(r => r.lab === 'テーブル');
+    check(!!tblRow && tblRow.nos.length >= 3, '7.6: テーブル行に3卓以上ある');
+    const tLast = tblRow.nos[tblRow.nos.length - 1];
+    const tMid = tblRow.nos[tblRow.nos.length - 2];
+    const tFirst = tblRow.nos[tblRow.nos.length - 3];
+
+    // 7.6-1: 席tLastをタップ→候補「＋tMid」が出る→押す→候補「＋tFirst」が出る→保存で昇順
+    const seatEl1 = document.querySelector(`.seat[data-no="${tLast}"]`);
+    seatEl1.click();
+    check($('dlg').open, '7.6: 席タップで予約作成ダイアログが開く');
+    const frmBox = $('frm').querySelector('#fTblPicker');
+    check(!!frmBox, '7.6: 予約作成画面に卓ピッカーが出る');
+
+    const onBtn1 = frmBox.querySelector(`.btn-tbl.on[data-no="${tLast}"]`);
+    check(!!onBtn1, '7.6: 最初にタップした席が選択中(on)');
+
+    let candMid = [...frmBox.querySelectorAll('.btn-tbl-cand')].find(b => b.dataset.no === tMid);
+    check(!!candMid && candMid.textContent.includes(`＋${tMid}`), '7.6: 隣の席の候補ボタンが出る');
+    candMid.click();
+
+    let candFirst = [...frmBox.querySelectorAll('.btn-tbl-cand')].find(b => b.dataset.no === tFirst);
+    check(!!candFirst && candFirst.textContent.includes(`＋${tFirst}`), '7.6: 選択追加後にさらに隣の席の候補が出る');
+    candFirst.click();
+
+    $('frm').name.value = '隣席候補テスト客';
+    $('frm').querySelector('button[value="ok"]').click();
+    const createdEntry = db.entries.find(e => e.name === '隣席候補テスト客');
+    const expectedTables = [tFirst, tMid, tLast].sort((a,b)=>Number(a)-Number(b));
+    check(!!createdEntry && JSON.stringify(createdEntry.tables) === JSON.stringify(expectedTables), '7.6: 保存で選択した卓が昇順で保存される');
+
+    // 7.6-2: 編集で真ん中の席tMidを外す→飛び番でも保存できる
+    draw();
+    const getLiveCreatedChip = () => document.querySelector(`.seat[data-no="${tLast}"] .chip[data-entry-id="${createdEntry.id}"]`);
+    getLiveCreatedChip().click();
+    const actBtns = $('actBtns');
+    const editBtn = [...actBtns.querySelectorAll('button')].find(b => b.textContent === '編集');
+    editBtn.click();
+    check($('editDlg').open, '7.6: 編集ダイアログが開く');
+    const editBox = $('editFrm').querySelector('#editTblPicker');
+    check(!!editBox, '7.6: 編集画面に卓ピッカーが出る');
+
+    const midOnBtn = editBox.querySelector(`.btn-tbl.on[data-no="${tMid}"]`);
+    check(!!midOnBtn, '7.6: 編集画面で選択中卓がon表示');
+    midOnBtn.click();
+    const expectedAfterRemove = [tFirst, tLast].sort((a,b)=>Number(a)-Number(b));
+    const parsedEditVal = $('editFrm').tables.value.split(/[、,・\s]+/).filter(Boolean).sort((a,b)=>Number(a)-Number(b));
+    check(JSON.stringify(parsedEditVal) === JSON.stringify(expectedAfterRemove), '7.6: 卓を外すと入力欄と同期する');
+
+    $('editFrm').querySelector('button[value="save"]').click();
+    check(JSON.stringify(byId(createdEntry.id).tables) === JSON.stringify(expectedAfterRemove), '7.6: 飛び番になっても外した状態で保存できる');
+
+    // 7.6-3: 最後の1卓は外せない
+    draw();
+    getLiveCreatedChip().click();
+    [...$('actBtns').querySelectorAll('button')].find(b => b.textContent === '編集').click();
+    const editBox2 = $('editFrm').querySelector('#editTblPicker');
+    const firstOnBtn = editBox2.querySelector(`.btn-tbl.on[data-no="${tFirst}"]`);
+    firstOnBtn.click();
+    check($('editFrm').tables.value.trim() === tLast, '7.6: 残り1卓になる');
+    const lastOnBtn = editBox2.querySelector(`.btn-tbl.on[data-no="${tLast}"]`);
+    lastOnBtn.click();
+    check($('editFrm').tables.value.trim() === tLast, '7.6: 最後の1卓は外せない');
+    $('editDlg').close();
+
+    // 7.6-4: 入力欄に手入力で双方向同期
+    getLiveCreatedChip().click();
+    [...$('actBtns').querySelectorAll('button')].find(b => b.textContent === '編集').click();
+    const cntRow = ROWS.find(r => r.lab === 'カウンター');
+    const c1 = cntRow.nos[0], c3 = cntRow.nos[2];
+    $('editFrm').tables.value = `${c1}, ${c3}`;
+    $('editFrm').tables.dispatchEvent(new Event('input'));
+    const editBox3 = $('editFrm').querySelector('#editTblPicker');
+    const c1On = editBox3.querySelector(`.btn-tbl.on[data-no="${c1}"]`);
+    const c3On = editBox3.querySelector(`.btn-tbl.on[data-no="${c3}"]`);
+    check(!!c1On && !!c3On, '7.6: 入力欄に入力するとボタンがon表示になる（双方向同期）');
+    $('editDlg').close();
+
+    // 7.6-5: 席候補の占有表示（予約あり／使用中）と、それでも押せること
+    const otherRes = {
+      id: 'other-res-test',
+      date: date,
+      kind: 'res',
+      name: '占有確認客',
+      tables: [tMid],
+      people: 2,
+      children: 0,
+      time: '19:00',
+      tel: '',
+      note: '',
+      arrived: false,
+      gone: false,
+      called: false,
+      cancelled: false,
+      nomiStart: null,
+      nomiExtra: 0,
+      limitEnd: null
+    };
+    db.entries.push(otherRes);
+    draw();
+
+    document.querySelector(`.seat[data-no="${tLast}"]`).click();
+    const frmBoxOcc = $('frm').querySelector('#fTblPicker');
+    const candMidOcc = [...frmBoxOcc.querySelectorAll('.btn-tbl-cand')].find(b => b.dataset.no === tMid);
+    check(candMidOcc && candMidOcc.textContent.includes('予約あり'), '7.6: 他予約がある候補席に「予約あり」と出る');
+    candMidOcc.click();
+    const frmOnMid = frmBoxOcc.querySelector(`.btn-tbl.on[data-no="${tMid}"]`);
+    check(!!frmOnMid, '7.6: 「予約あり」の候補も押して追加できる');
+    $('dlg').close();
+
+    otherRes.arrived = true;
+    setOcc(tMid, true);
+    draw();
+    document.querySelector(`.seat[data-no="${tLast}"]`).click();
+    const frmBoxOcc2 = $('frm').querySelector('#fTblPicker');
+    const candMidOcc2 = [...frmBoxOcc2.querySelectorAll('.btn-tbl-cand')].find(b => b.dataset.no === tMid);
+    check(candMidOcc2 && candMidOcc2.textContent.includes('使用中'), '7.6: 使用中の候補席に「使用中」と出る');
+    candMidOcc2.click();
+    const frmOnMid2 = frmBoxOcc2.querySelector(`.btn-tbl.on[data-no="${tMid}"]`);
+    check(!!frmOnMid2, '7.6: 「使用中」の候補も押して追加できる');
+    $('dlg').close();
+
+    // 7.6-6: 未配席編集で破綻しない（本番経路）
+    getLiveCreatedChip().click();
+    [...$('actBtns').querySelectorAll('button')].find(b => b.textContent === '編集').click();
+    $('editFrm').tables.value = '';
+    $('editFrm').tables.dispatchEvent(new Event('input'));
+    const unassignedBox = $('editFrm').querySelector('#editTblPicker');
+    check(unassignedBox && unassignedBox.children.length === 0, '7.6: 編集で卓を空にしたときピッカーが空で破綻しない');
+    $('editFrm').querySelector('button[value="save"]').click();
+    check(byId(createdEntry.id).tables.length === 0, '7.6: 卓を空にして保存で未配席になる');
+    draw();
+    const unassignedCard = document.querySelector(`#resList .item[data-entry-id="${createdEntry.id}"]`);
+    check(!!unassignedCard, '7.6: 未配席予約が保留一覧に表示される');
+    unassignedCard.click();
+    check($('dlg').open, '7.6: 保留一覧から未配席予約を開いても破綻しない');
+    $('frm').querySelector('button[value="cancel"]').click();
+
+    // 7.6-7: 追加席でも破綻せず候補が出る（本番ボタン・席クリック経路）
+    $('exNo').value = '91';
+    $('exAdd').click();
+    $('exNo').value = '92';
+    $('exAdd').click();
+    check(extraOf(date).includes('91') && extraOf(date).includes('92'), '7.6: 臨時席追加ボタンで追加席ができる');
+    draw();
+    const extraRow = extraOf(date);
+    const exStart = extraRow[extraRow.length - 2], exNext = extraRow[extraRow.length - 1];
+    const exSeat = document.querySelector(`.seat[data-no="${exStart}"]`);
+    check(!!exSeat, '7.6: 追加席のマスが表示される');
+    exSeat.click();
+    check($('dlg').open, '7.6: 追加席クリックで予約作成が開く');
+    const exFrmBox = $('frm').querySelector('#fTblPicker');
+    const candExtra = [...exFrmBox.querySelectorAll('.btn-tbl-cand')].find(b => b.dataset.no === exNext);
+    check(!!candExtra && candExtra.textContent.includes(`＋${exNext}`), '7.6: 追加席の並びから隣席候補が出る');
+    candExtra.click();
+    const extraOn = exFrmBox.querySelector(`.btn-tbl.on[data-no="${exNext}"]`);
+    check(!!extraOn, '7.6: 追加席候補を押して追加できる');
+    $('frm').querySelector('button[value="cancel"]').click();
+
+    // クリーンアップ
+    db.entries = db.entries.filter(e => !['nomi-ext-test', createdEntry.id, 'other-res-test'].includes(e.id));
+    db.extra = db.extra.filter(x => !(x.date === date && ['91','92'].includes(x.no)));
+    setOcc(tMid, false);
+    save(); draw();
+  }
 
   db=JSON.parse(bk);date=oldDate;weekStart=oldWeekStart;save();draw();
   window.alert=_origAlert;
