@@ -133,7 +133,7 @@ header h1{font-size:1em;margin:0 .4em 0 0;font-weight:700;letter-spacing:.22em}
 .seat.used .no em{font-style:normal;font-size:.6em;color:var(--kinari);font-weight:600}
 .seat.used .chip{background:transparent}
 .seat.used .chip-note{color:var(--kinari)}
-.seat.drop-tgt{border-color:var(--enji);border-style:dashed}
+.seat.drop-tgt, #dates button.drop-tgt{border-color:var(--enji);border-style:dashed}
 .seat .no{font-size:1.15em;font-weight:700;line-height:1;display:flex;gap:.25em;align-items:center}
 .seat .no em{font-style:normal;font-size:.6em;color:var(--ao);font-weight:600}
 .seat .as{flex:1;display:flex;flex-direction:column;gap:2px;margin-top:2px;overflow:hidden}
@@ -653,7 +653,8 @@ function getNomiInfo(e){
   if(elapsedMin >= NOMI_MIN){
     return {stage: 3, cls: 'badge nomi-alert', text: 'ラストオーダー'};
   } else if(elapsedMin >= NOMI_MIN - NOMI_WARN_MIN){
-    return {stage: 2, cls: 'badge nomi-warn', text: 'まもなくラストオーダー'};
+    const remMin = Math.max(0, NOMI_MIN - elapsedMin);
+    return {stage: 2, cls: 'badge nomi-warn', text: `まもなくラストオーダー あと${remMin}分`};
   } else {
     const remMin = Math.max(0, NOMI_MIN - elapsedMin);
     return {stage: 1, cls: 'badge nomi-normal', text: `飲み放題 あと${remMin}分`};
@@ -702,23 +703,25 @@ function checkDayChange(){
   }
 }
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)checkDayChange()});
-setInterval(checkDayChange,60000);
-setInterval(()=>{
-  if(typeof drag !== 'undefined' && drag) return;
-  const g=lateSig(), t=timerSig();
-  if(g!==lastLateSig || t!==lastTimerSig){
-    lastLateSig=g;
-    lastTimerSig=t;
-    draw();
-  }
-},30000);
+if(!location.search.includes('test=1')){
+  setInterval(checkDayChange,60000);
+  setInterval(()=>{
+    if(typeof drag !== 'undefined' && drag) return;
+    const g=lateSig(), t=timerSig();
+    if(g!==lastLateSig || t!==lastTimerSig){
+      lastLateSig=g;
+      lastTimerSig=t;
+      draw();
+    }
+  },30000);
+}
 
 /* ---------- 席 ---------- */
 const ROWS=[
   {lab:'座敷',  nos:['17','18','19','20']},
-  {lab:'小上り',nos:['11','12','13','14','15','16']},
-  {lab:'テーブル',nos:['8','9','10']},
-  {lab:'カウンター',nos:['1','2','3','4','5','6','7']},
+  {lab:'小上り',nos:['16','15','14','13','12','11']},
+  {lab:'テーブル',nos:['10','9','8']},
+  {lab:'カウンター',nos:['7','6','5','4','3','2','1']},
 ];
 const extraOf=d=>db.extra.filter(x=>x.date===d).map(x=>x.no);
 const occOf=d=>(db.occ[d]||(db.occ[d]=[]));
@@ -730,6 +733,13 @@ const addExtra=(d,no)=>{
 };
 
 /* ---------- 参照 ---------- */
+function dispName(e){
+  const raw = typeof e === 'string' ? e : (e?.name ?? '');
+  const trimmed = raw.trim();
+  if(!trimmed || trimmed === '来店客') return trimmed;
+  if(/(?:様|さん|ちゃん|くん|御中)$/.test(trimmed)) return trimmed;
+  return trimmed + 'さん';
+}
 const hue=id=>{let h=0;for(const c of id)h=(h*31+c.charCodeAt(0))%46;return h};
 const color=id=>`hsl(${hue(id)} 58% 50%)`;
 const ofDay=(d,kind)=>db.entries.filter(e=>e.date===d&&(!kind||e.kind===kind)&&!e.cancelled&&!e.gone);
@@ -761,7 +771,7 @@ function itemEl(e){
   div.innerHTML=`<div class="l1"><span class="nm"></span><span class="mt"></span></div>
     <div class="tbl"></div><div class="note mt"></div><div class="acts"></div>`;
   const nmEl=div.querySelector('.nm');
-  nmEl.textContent=e.name;
+  nmEl.textContent=dispName(e);
   if(isWait){
     const badge=document.createElement('span');
     badge.className='badge';
@@ -769,8 +779,8 @@ function itemEl(e){
     nmEl.after(badge);
   }
   const handle=document.createElement('button');handle.type='button';handle.className='drag-handle';handle.textContent='⠿';
-  handle.setAttribute('aria-label',`${e.name} を卓へドラッグ`);handle.dataset.entryId=e.id;
-  bindDrag(div,{type:'add',entryId:e.id},e.name);bindDrag(handle,{type:'add',entryId:e.id},e.name);div.querySelector('.l1').prepend(handle);
+  handle.setAttribute('aria-label',`${dispName(e)} を卓へドラッグ`);handle.dataset.entryId=e.id;
+  bindDrag(div,{type:'add',entryId:e.id},dispName(e));bindDrag(handle,{type:'add',entryId:e.id},dispName(e));div.querySelector('.l1').prepend(handle);
   div.querySelector('.mt').textContent=meta;
   div.querySelector('.tbl').textContent='卓未定';
   div.querySelector('.note').textContent=e.note||'';
@@ -830,7 +840,7 @@ function drawLists(){
       const tblStr=e.tables&&e.tables.length?'卓 '+e.tables.join(', '):'卓未定';
       d.innerHTML=`<div class="l1"><span class="nm"></span><span class="mt"></span></div>
         <div class="tbl"></div><div class="acts"></div>`;
-      d.querySelector('.nm').textContent=e.name;
+      d.querySelector('.nm').textContent=dispName(e);
       d.querySelector('.mt').textContent=meta;
       d.querySelector('.tbl').textContent=tblStr;
       const b=document.createElement('button');
@@ -880,7 +890,7 @@ function openMoreDlg(entries,no){
     const b=document.createElement('button');
     b.type='button';
     const meta=[e.time||'時間未定', peopleText(e)].filter(Boolean).join(' / ');
-    b.textContent=`${e.name}（${meta}）`;
+    b.textContent=`${dispName(e)}（${meta}）`;
     b.onclick=()=>{dlg.close();openActDlg(e,no)};
     box.appendChild(b);
   });
@@ -939,7 +949,7 @@ function seatEl(no){
         wb.textContent=e.called?'連絡済':'電話待ち';
         c.querySelector('.chip-name').before(wb);
       }
-      c.querySelector('.chip-name').textContent=e.name;
+      c.querySelector('.chip-name').textContent=dispName(e);
       c.querySelector('.chip-people').textContent=peopleText(e);
       if(e.time){const time=document.createElement('span');time.className='chip-time';time.textContent=e.time;c.querySelector('.chip-meta').appendChild(time)}
       const note1=(e.note||'').split('\n')[0].trim();
@@ -976,8 +986,8 @@ function seatEl(no){
         }
       }
       c.dataset.entryId=e.id;c.dataset.from=no;
-      c.setAttribute('aria-label',`${e.name} を卓または保留へドラッグ`);
-      bindDrag(c,{type:'move',entryId:e.id,from:no},e.name);
+      c.setAttribute('aria-label',`${dispName(e)} を卓または保留へドラッグ`);
+      bindDrag(c,{type:'move',entryId:e.id,from:no},dispName(e));
       // チップのどこをタップしても状態ボタン画面を開く
       c.onclick=ev=>{ev.stopPropagation();openActDlg(e,no)};
       as.appendChild(c);
@@ -1186,8 +1196,8 @@ function delExtra(no){
 function openActDlg(e,no){
   const dlg=$('actDlg'), title=$('actTitle'), stateEl=$('actState'), box=$('actBtns'), timersEl=$('actTimers');
   const nTbl=e.tables.length;
-  const tblStr=e.tables.join('・')||String(no);
-  title.textContent=`${e.name}（卓 ${tblStr}）`; // 25.1: textContent で挿入
+  const tblStr=e.tables.slice().sort((a,b)=>Number(a)-Number(b)).join('・')||String(no);
+  title.textContent=`${dispName(e)}（卓 ${tblStr}）`; // 25.1: textContent で挿入
   stateEl.textContent=`いま：${e.arrived ? '使用中' : 'まだ来店していない予約'}`;
   box.replaceChildren();
   if(timersEl) timersEl.replaceChildren();
@@ -1297,7 +1307,7 @@ let drag=null,pendingDrag=null;
 function notifyMoved(name,toNo){
   const h=document.getElementById('hint');
   if(h){
-    h.textContent=`${name}を卓${toNo}へ移しました`;
+    h.textContent=`${dispName(name)}を卓${toNo}へ移しました`;
     setTimeout(()=>{if(h.textContent.includes('へ移しました'))h.textContent=''},2000);
   }
 }
@@ -1321,6 +1331,10 @@ function dragList(ev){
   const at=document.elementFromPoint(ev.clientX,ev.clientY);
   return at&&at.closest('#resList');
 }
+function dragDate(ev){
+  const at=document.elementFromPoint(ev.clientX,ev.clientY);
+  return at&&at.closest('#dates button[data-date]');
+}
 function moveDrag(ev){
   if(!drag&&pendingDrag&&ev.pointerId===pendingDrag.pointerId){
     if(Math.hypot(ev.clientX-pendingDrag.x,ev.clientY-pendingDrag.y)<12) return;
@@ -1328,26 +1342,57 @@ function moveDrag(ev){
   }
   if(!drag||ev.pointerId!==drag.pointerId) return;
   drag.preview.style.left=ev.clientX+'px';drag.preview.style.top=ev.clientY+'px';
-  document.querySelectorAll('.seat.drop-tgt,.list.drop-tgt').forEach(el=>el.classList.remove('drop-tgt'));
-  const seat=dragSeat(ev), list=dragList(ev);
+  document.querySelectorAll('.seat.drop-tgt,.list.drop-tgt,#dates button.drop-tgt').forEach(el=>el.classList.remove('drop-tgt'));
+  const seat=dragSeat(ev), list=dragList(ev), dateBtn=dragDate(ev);
   if(seat) seat.classList.add('drop-tgt');
   else if(drag.type==='move'&&list) list.classList.add('drop-tgt');
+  else if(dateBtn) dateBtn.classList.add('drop-tgt');
 }
 function clearDrag(){
   pendingDrag=null;
   if(!drag) return;
   drag.preview.remove();drag.source.classList.remove('dragging');
-  document.querySelectorAll('.seat.drop-tgt,.list.drop-tgt').forEach(el=>el.classList.remove('drop-tgt'));drag=null;
+  document.querySelectorAll('.seat.drop-tgt,.list.drop-tgt,#dates button.drop-tgt').forEach(el=>el.classList.remove('drop-tgt'));drag=null;
 }
 function endDrag(ev){
   if(!drag&&pendingDrag&&ev.pointerId===pendingDrag.pointerId){pendingDrag=null;return}
   if(!drag||ev.pointerId!==drag.pointerId) return;
-  const state=drag, seat=dragSeat(ev), list=dragList(ev), no=seat&&seat.dataset.no, e=byId(state.entryId);
-  let changed=e&&(no?(state.type==='add'?assignTables(e,[no]):moveTable(e,state.from,no)):state.type==='move'&&list&&unassign(e));
+  const state=drag, seat=dragSeat(ev), list=dragList(ev), dateBtn=dragDate(ev);
+  const no=seat&&seat.dataset.no, e=byId(state.entryId);
+  let changed=false;
+  if(e && dateBtn){
+    const targetDate=dateBtn.dataset.date;
+    if(targetDate && targetDate!==date){
+      if(e.arrived){
+        const h=document.getElementById('hint');
+        if(h){
+          h.textContent='使用中の予約は日付を変えられません';
+          setTimeout(()=>{if(h.textContent.includes('使用中の予約は日付を変えられません'))h.textContent=''},2000);
+        }
+      } else {
+        const oldTables=e.tables.slice();
+        e.date=targetDate;
+        e.tables=[];
+        if((date===today()||targetDate===today())&&oldTables.length){
+          oldTables.forEach(t=>setOcc(t,false));
+        }
+        changed=true;
+        const dObj=parse(targetDate);
+        const targetMD=`${dObj.getMonth()+1}/${dObj.getDate()}`;
+        const h=document.getElementById('hint');
+        if(h){
+          h.textContent=`${dispName(e)}を${targetMD}へ移しました`;
+          setTimeout(()=>{if(h.textContent.includes('へ移しました'))h.textContent=''},2000);
+        }
+      }
+    }
+  } else if(e){
+    changed=no?(state.type==='add'?assignTables(e,[no]):moveTable(e,state.from,no)):state.type==='move'&&list&&unassign(e);
+  }
   clearDrag();
   if(changed){
     save();draw();
-    if(no&&e) notifyMoved(e.name,no);
+    if(no&&e) notifyMoved(dispName(e),no);
   }
 }
 document.addEventListener('pointermove',moveDrag);
@@ -1562,7 +1607,7 @@ function openForm(kind,e,forDate,seatNo){
   const nameLabelText = isToday ? '名前（空欄なら来店客）' : '名前*';
 
   f.innerHTML=`<h3>${title}</h3>
-   <label id="nameLbl">${nameLabelText}</label><input name="name" ${nameRequired?'required':''} autofocus autocomplete="off" autocorrect="off" spellcheck="false" ${isSeat&&isToday?'placeholder="空欄で「来店客」として使用中"':''}>
+   <label id="nameLbl">${nameLabelText}</label><input name="name" ${nameRequired?'required':''} autofocus autocomplete="off" autocorrect="off" spellcheck="false" ${isSeat&&isToday?'placeholder="空欄で「来店客」として使用中 / 名字だけでOK（さんは自動）"':'placeholder="名字だけでOK（さんは自動）"'}>
    <label>大人</label><div id="fPeoplePicker"></div><input type="hidden" name="people" autocomplete="off">
    <label>子供</label><div class="childPicker"></div><input type="hidden" name="children" value="${e?.children||0}" autocomplete="off">
    <label>時間</label><div id="fTimePicker"></div><input type="hidden" name="time" autocomplete="off">
@@ -1714,7 +1759,7 @@ function openForm(kind,e,forDate,seatNo){
 function openEdit(e,no){
   const f=document.getElementById('editFrm'), dlg=document.getElementById('editDlg');
   f.innerHTML=`<h3></h3>
-   <label>名前</label><input name="name" required autocomplete="off" autocorrect="off" spellcheck="false">
+   <label>名前</label><input name="name" required autocomplete="off" autocorrect="off" spellcheck="false" placeholder="名字だけでOK（さんは自動）">
    <label>大人</label><div id="editPeoplePicker"></div><input type="hidden" name="people" autocomplete="off">
    <label>子供</label><div class="childPicker"></div><input type="hidden" name="children" value="${e?.children||0}" autocomplete="off">
    <label>時間</label><div id="editTimePicker"></div><input type="hidden" name="time" autocomplete="off">
@@ -1728,7 +1773,7 @@ function openEdit(e,no){
      <button value="cancel" type="submit">取消</button>
      <button value="close" type="submit">閉じる</button>
    </div>`;
-  f.querySelector('h3').textContent=`${e.name}（卓 ${no}）`;
+  f.querySelector('h3').textContent=`${dispName(e)}（卓 ${no}）`;
 
   const adultInit = (e && e.people !== null && e.people !== undefined) ? Math.max(0, e.people - (e.children || 0)) : null;
   const peoplePick = createPeoplePicker(adultInit, f.people);
@@ -1789,13 +1834,13 @@ function practiceData(){
   const lateHM=String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
   const e=(o)=>Object.assign({date:t,kind:'res',tel:'',note:'',time:'',people:2,children:0,tables:[],arrived:false,gone:false,called:false,cancelled:false,nomiStart:null,limitEnd:null},o);
   return {fs:db.fs,extra:[],occ:{},leftOff:false,entries:[
-    e({id:'p-hold',name:'青木様',time:'18:30',people:4,children:1,note:'座敷希望'}),
-    e({id:'p-wait',name:'大野様',kind:'wait',tel:'090-0000-1234',people:2,note:'空き次第'}),
-    e({id:'p-late',name:'上田様',time:lateHM,people:3,tables:['12']}),
-    e({id:'p-nomi',name:'石井様',time:'17:30',people:4,tables:['8'],arrived:true,nomiStart:now-80*60000}),
-    e({id:'p-limit',name:'江口様',time:'18:00',people:2,tables:['9'],arrived:true,limitEnd:now+12*60000}),
-    e({id:'p-cnt',name:'加藤様',time:'20:00',people:2,tables:['1','2']}),
-    e({id:'p-zashiki',name:'佐々木様',time:'19:00',people:8,children:2,tables:['17']}),
+    e({id:'p-hold',name:'青木',time:'18:30',people:4,children:1,note:'座敷希望'}),
+    e({id:'p-wait',name:'大野',kind:'wait',tel:'090-0000-1234',people:2,note:'空き次第'}),
+    e({id:'p-late',name:'上田',time:lateHM,people:3,tables:['12']}),
+    e({id:'p-nomi',name:'石井',time:'17:30',people:4,tables:['8'],arrived:true,nomiStart:now-80*60000}),
+    e({id:'p-limit',name:'江口',time:'18:00',people:2,tables:['9'],arrived:true,limitEnd:now+12*60000}),
+    e({id:'p-cnt',name:'加藤',time:'20:00',people:2,tables:['1','2']}),
+    e({id:'p-zashiki',name:'佐々木',time:'19:00',people:8,children:2,tables:['17']}),
   ]};
 }
 function enterPractice(){
@@ -1845,11 +1890,11 @@ const TUT_STEPS=[
              askDlg:{text:'「終了」を押してください。',target:()=>$('askDlg').querySelector('button[value="yes"]')}}},
   {text:'間違えて「食事終了」を押したときの戻し方です。\n左下の「終了・取消」の「表示」を押し、出てきた「使用中に戻す」を押してください。',
    target:()=>$('cxList').hidden?$('cxToggle'):$('cxList').querySelector('button'),done:()=>!db.entries.some(e=>e.date===date&&e.gone)},
-  {text:'左の「卓未定の予約」は、まだ席が決まっていない予約です。\n青木様のカードを指で押さえたまま、空いている席（どこでも大丈夫）まで動かして、指を離してください。',
+  {text:'左の「卓未定の予約」は、まだ席が決まっていない予約です。\n青木さんのカードを指で押さえたまま、空いている席（どこでも大丈夫）まで動かして、指を離してください。',
    target:()=>document.querySelector('#resList .item[data-entry-id="p-hold"]'),done:()=>(byIdP('p-hold')?.tables.length||0)>0},
   {text:'席の中に出る表示の意味です（1/3）。\n赤く点滅して「遅れ」…予約の時間を過ぎても、まだ来ていないお客さんです（席12）。\n来店したら、予約を押して「使用中にする」を押します。',
    target:()=>document.querySelector('.seat[data-no="12"]'),next:true},
-  {text:'表示の意味（2/3）。飲み放題の時間です（席8）。\n「飲み放題 あと○分」→ 75分で黄色「まもなくラストオーダー」→ 90分で赤く点滅「ラストオーダー」。\n黄色や赤になったら、お客さんに声をかけます。',
+  {text:'表示の意味（2/3）。飲み放題の時間です（席8）。\n「飲み放題 あと○分」→ 75分で黄色「まもなくラストオーダー あと○分」→ 90分で赤く点滅「ラストオーダー」。\n黄色や赤になったら、お客さんに声をかけます。',
    target:()=>document.querySelector('.seat[data-no="8"]'),next:true},
   {text:'表示の意味（3/3）。「あと○分」は、席を空けてもらうまでの時間です（席9）。\n飲み放題とこの時間は、使用中の予約を押すと下にボタンがあります。使わない日は押さなくて大丈夫です。',
    target:()=>document.querySelector('.seat[data-no="9"]'),next:true},
@@ -2025,14 +2070,14 @@ function seedDemo(){
   if(!new URLSearchParams(location.search).has('demo') || hasData) return;
   const later=addDays(weekStart,2), tomorrow=addDays(today(),1);
   db.entries.push(
-    {id:'demo-a',date:today(),kind:'res',name:'田中様',tel:'090-0000-0001',time:'18:30',people:4,note:'座敷希望',tables:[],arrived:false,gone:false,called:false,cancelled:false},
-    {id:'demo-b',date:today(),kind:'res',name:'佐藤様',tel:'',time:'20:00',people:2,note:'',tables:['8'],arrived:false,gone:false,called:false,cancelled:false},
-    {id:'demo-c',date:today(),kind:'wait',name:'鈴木様',tel:'090-0000-0002',time:'',people:2,note:'空き次第',tables:[],arrived:false,gone:false,called:true,cancelled:false},
-    {id:'demo-d',date:today(),kind:'res',name:'山本様',tel:'',time:'19:00',people:3,note:'カウンター希望',tables:['1','2','3'],arrived:true,gone:false,called:false,cancelled:false},
-    {id:'demo-g',date:today(),kind:'res',name:'渡辺様',tel:'',time:'21:00',people:3,note:'',tables:['8'],arrived:false,gone:false,called:false,cancelled:false},
-    {id:'demo-e',date:later,kind:'res',name:'高橋様',tel:'',time:'19:00',people:6,note:'',tables:['17'],arrived:false,gone:false,called:false,cancelled:false},
-    {id:'demo-f',date:tomorrow,kind:'res',name:'伊藤様',tel:'',time:'',people:null,note:'',tables:[],arrived:false,gone:false,called:false,cancelled:false},
-    {id:'demo-h',date:today(),kind:'res',name:'木村様',tel:'',time:'17:30',people:4,children:1,note:'座敷希望',tables:['18'],arrived:false,gone:false,called:false,cancelled:false},
+    {id:'demo-a',date:today(),kind:'res',name:'田中',tel:'090-0000-0001',time:'18:30',people:4,note:'座敷希望',tables:[],arrived:false,gone:false,called:false,cancelled:false},
+    {id:'demo-b',date:today(),kind:'res',name:'佐藤',tel:'',time:'20:00',people:2,note:'',tables:['8'],arrived:false,gone:false,called:false,cancelled:false},
+    {id:'demo-c',date:today(),kind:'wait',name:'鈴木',tel:'090-0000-0002',time:'',people:2,note:'空き次第',tables:[],arrived:false,gone:false,called:true,cancelled:false},
+    {id:'demo-d',date:today(),kind:'res',name:'山本',tel:'',time:'19:00',people:3,note:'カウンター希望',tables:['1','2','3'],arrived:true,gone:false,called:false,cancelled:false},
+    {id:'demo-g',date:today(),kind:'res',name:'渡辺',tel:'',time:'21:00',people:3,note:'',tables:['8'],arrived:false,gone:false,called:false,cancelled:false},
+    {id:'demo-e',date:later,kind:'res',name:'高橋',tel:'',time:'19:00',people:6,note:'',tables:['17'],arrived:false,gone:false,called:false,cancelled:false},
+    {id:'demo-f',date:tomorrow,kind:'res',name:'伊藤',tel:'',time:'',people:null,note:'',tables:[],arrived:false,gone:false,called:false,cancelled:false},
+    {id:'demo-h',date:today(),kind:'res',name:'木村',tel:'',time:'17:30',people:4,children:1,note:'座敷希望',tables:['18'],arrived:false,gone:false,called:false,cancelled:false},
   );
   db.occ[today()]=['1','2','3'];save();
 }
@@ -2041,7 +2086,7 @@ draw();
 if(loadFailed&&!location.search.includes('test=1')){
   alert('保存されていた予約を読み取れませんでした。\n読めなかった内容は端末内に退避してあります。\n\n画面右下の「バックアップ」を開き、「アプリの中の控え」から戻してください。');
 }
-if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});
+if('serviceWorker' in navigator && !location.search.includes('test=1')) navigator.serviceWorker.register('sw.js').catch(()=>{});
 // 作業中にiPadがスリープしないようにする
 /* ---------- 画面を消さない ----------
    Wake Lockは iPadOS 16.4〜18.3 のホーム画面アプリでは効かない（WebKit bug 254545）。
@@ -2128,7 +2173,7 @@ if(location.search.includes('test=1')) (async()=>{
   $('actDlg').close();
 
   check(chip.textContent.includes('20:00')&&chip.textContent.includes('2名')&&chip.querySelector('.chip-note')?.textContent==='カウンター希望','チップは時間・人数と要望の1行目を表示する');
-  check(chip.querySelector('.chip-name')?.textContent==='ドラッグ検査'&&chip.querySelector('.chip-people')?.textContent==='2名'&&chip.querySelector('.chip-time')?.textContent==='20:00'&&[...chip.querySelectorAll('.chip-name,.chip-people,.chip-time')].map(el=>el.className).join()==='chip-name,chip-people,chip-time','チップの名前・人数・時間は3つの別々の要素で順に表示する');
+  check(chip.querySelector('.chip-name')?.textContent==='ドラッグ検査さん'&&chip.querySelector('.chip-people')?.textContent==='2名'&&chip.querySelector('.chip-time')?.textContent==='20:00'&&[...chip.querySelectorAll('.chip-name,.chip-people,.chip-time')].map(el=>el.className).join()==='chip-name,chip-people,chip-time','チップの名前・人数・時間は3つの別々の要素で順に表示する');
 
   /* === 27章 完了条件8: 保留カードを卓へドラッグ→割り当て。チップを保留一覧へドラッグ→解除 === */
   dragFromTo(document.querySelector('.chip[data-entry-id="drag1"]'),document.getElementById('resList'));
@@ -2242,7 +2287,7 @@ if(location.search.includes('test=1')) (async()=>{
   const dateDragTarget=addDays(weekStart,1);
   const dragTargetDate=date;
   const noDateDrag=entry('no-date-drag','日付ドラッグ不可');db.entries.push(noDateDrag);draw();
-  dragFromTo(document.querySelector('.drag-handle[data-entry-id="no-date-drag"]'),document.querySelector('#dates button'));
+  dragFromTo(document.querySelector('.drag-handle[data-entry-id="no-date-drag"]'),document.querySelector('#dates button.on')||document.querySelector('#dates button'));
   check(noDateDrag.date===dragTargetDate,'完了条件9: 日付タブへドラッグしても日付は変わらない');
 
   /* === 27章 完了条件12: 使用中の青と文字の対比が4.5以上 === */
@@ -2288,13 +2333,13 @@ if(location.search.includes('test=1')) (async()=>{
 
   const cxItems=[...$('cxList').querySelectorAll('.item')];
   const itemNames=cxItems.map(it=>it.querySelector('.nm')?.textContent);
-  check(itemNames.includes('終了客')&&itemNames.includes('取消客'),'完了条件15: 食事終了した予約と取消した予約が両方出る');
+  check(itemNames.includes('終了客さん')&&itemNames.includes('取消客さん'),'完了条件15: 食事終了した予約と取消した予約が両方出る');
   check(!itemNames.includes('別日取消'),'完了条件15: 別の日の一覧には出ない');
-  check(itemNames[0]==='取消客'&&itemNames[1]==='終了客','完了条件15: 新しく消えたものが上（配列の後ろほど上）');
+  check(itemNames[0]==='取消客さん'&&itemNames[1]==='終了客さん','完了条件15: 新しく消えたものが上（配列の後ろほど上）');
 
-  const goneItem=cxItems.find(it=>it.querySelector('.nm')?.textContent==='終了客');
+  const goneItem=cxItems.find(it=>it.querySelector('.nm')?.textContent==='終了客さん');
   check(goneItem.querySelector('.mt')?.textContent.includes('終了')&&goneItem.querySelector('.tbl')?.textContent.includes('15'),'完了条件15: 終了客の行に状態「終了」と卓番が含まれる');
-  const cxItem=cxItems.find(it=>it.querySelector('.nm')?.textContent==='取消客');
+  const cxItem=cxItems.find(it=>it.querySelector('.nm')?.textContent==='取消客さん');
   check(cxItem.querySelector('.mt')?.textContent.includes('取消')&&cxItem.querySelector('.tbl')?.textContent.includes('16'),'完了条件15: 取消客の行に状態「取消」と卓番が含まれる');
 
   /* === 27章 完了条件16: 「終了・取消」の「戻す」で、終了した予約がマスに予約として戻る === */
@@ -2518,7 +2563,7 @@ if(location.search.includes('test=1')) (async()=>{
   const multiNote=db.entries.at(-1);
   check(multiNote.note==='座敷希望\n21時までに退店\n子供いす2つ','要望の改行がそのまま保存される');
   date=multiNote.date;weekStart=mondayOf(date);draw();
-  const noteCell=[...document.querySelectorAll('#resList .item')].find(el=>el.querySelector('.nm').textContent==='改行メモ')?.querySelector('.note');
+  const noteCell=[...document.querySelectorAll('#resList .item')].find(el=>el.querySelector('.nm').textContent==='改行メモさん')?.querySelector('.note');
   check(noteCell?.textContent.split('\n').length===3&&getComputedStyle(noteCell).whiteSpace==='pre-line','一覧では要望の改行が行として見える');
   check($('frm').querySelector('#fPeoplePicker button.p-btn'),'人数はボタンで選ぶ');
 
@@ -2677,7 +2722,7 @@ if(location.search.includes('test=1')) (async()=>{
   check(b6Entry.gone, '食事終了でgone=true');
   draw();
   if ($('cxList').hidden) $('cxToggle').click();
-  const b6Item = [...$('cxList').querySelectorAll('.item')].find(it => it.querySelector('.nm')?.textContent === '復元使用中');
+  const b6Item = [...$('cxList').querySelectorAll('.item')].find(it => it.querySelector('.nm')?.textContent === '復元使用中さん');
   const b6RestoreBtn = b6Item.querySelector('button');
   check(b6RestoreBtn.textContent === '使用中に戻す', '28.1 B6: 戻すボタンが「使用中に戻す」');
   b6RestoreBtn.click();
@@ -2867,7 +2912,7 @@ if(location.search.includes('test=1')) (async()=>{
   delExtra(f3Seat);
   check(!extraOf(today()).includes(f3Seat), 'F3: 臨時席36を削除');
   if ($('cxList').hidden) $('cxToggle').click();
-  const f3Item = [...$('cxList').querySelectorAll('.item')].find(it => it.querySelector('.nm')?.textContent === 'F3客');
+  const f3Item = [...$('cxList').querySelectorAll('.item')].find(it => it.querySelector('.nm')?.textContent === 'F3客さん');
   f3Item.querySelector('button').click(); // 使用中に戻す
   check(f3Entry && f3Entry.tables.length === 0 && !f3Entry.arrived && !f3Entry.gone, 'F3: 存在しない卓36が取り除かれ卓未定(arrived=false)として戻る');
   check($('hint').textContent.includes('卓36が無いので卓未定に戻しました'), 'F3: ヒント欄に卓36が無いので卓未定に戻しましたと表示される');
@@ -3003,7 +3048,7 @@ if(location.search.includes('test=1')) (async()=>{
   const cxToggleBtn = $('cxToggle');
   if ($('cxList').hidden) cxToggleBtn.click();
   check(!$('cxList').hidden, 'F14: 一覧が開いている');
-  const f14Item = [...$('cxList').querySelectorAll('.item')].find(it => it.querySelector('.nm')?.textContent === 'F14客');
+  const f14Item = [...$('cxList').querySelectorAll('.item')].find(it => it.querySelector('.nm')?.textContent === 'F14客さん');
   f14Item.querySelector('button').click(); // 予約に戻す
   check($('cxList').hidden, 'F14: 最後の1件を戻すと一覧が閉じる');
   check(cxToggleBtn.textContent === '表示' && cxToggleBtn.disabled, 'F14: ボタン文言が「表示」に戻りdisabledになる');
@@ -3164,7 +3209,7 @@ if(location.search.includes('test=1')) (async()=>{
   nowMs = () => testStartTime + 75 * 60 * 1000;
   draw();
   const nomiWarnBadge = document.querySelector(`.seat[data-no="${b2Seat}"] .chip[data-entry-id="${b2Entry.id}"] .badge.nomi-warn`);
-  check(nomiWarnBadge && nomiWarnBadge.textContent === 'まもなくラストオーダー', 'B3: 75分経過で黄＋「まもなくラストオーダー」');
+  check(nomiWarnBadge && nomiWarnBadge.textContent === 'まもなくラストオーダー あと15分', 'B3: 75分経過で黄＋「まもなくラストオーダー あと15分」');
 
   nowMs = () => testStartTime + 90 * 60 * 1000;
   draw();
@@ -3249,7 +3294,7 @@ if(location.search.includes('test=1')) (async()=>{
     const realRaw=localStorage.getItem(KEY), realCount=db.entries.length;
     $('practiceBtn').click();
     check(practice&&document.body.classList.contains('practice')&&!$('practiceTag').hidden&&$('practiceTag').textContent.includes('練習中'),'練習: 押すと練習中の帯が出る');
-    check(db.entries.some(e=>e.name==='青木様')&&db.entries.every(e=>/様$/.test(e.name)),'練習: 架空の客名のデモが入る');
+    check(db.entries.some(e=>e.name==='青木')&&db.entries.every(e=>!/様$/.test(e.name)),'練習: 架空の客名のデモが入る');
     check(!$('tut').hidden&&$('tutStep').textContent.startsWith('練習 1 /')&&$('tutSkip').textContent==='次へ','練習: 最初に画面の見方の説明が出る');
     $('tutSkip').click();
     check($('tutStep').textContent.startsWith('練習 2 /')&&document.querySelector('.seat[data-no="10"]').classList.contains('tut-target'),'練習: 次へで、押す席が光る');
@@ -3286,7 +3331,7 @@ if(location.search.includes('test=1')) (async()=>{
     $('tutStop').click();
     check($('tut').hidden&&practice,'練習: 「説明を閉じる」で説明だけ消え、練習は続く');
     $('practiceEnd').click();
-    check(!practice&&!document.body.classList.contains('practice')&&$('practiceTag').hidden&&db.entries.length===realCount&&!db.entries.some(e=>e.name==='青木様'),'練習: 「練習を終わる」で本番の予約に戻る');
+    check(!practice&&!document.body.classList.contains('practice')&&$('practiceTag').hidden&&db.entries.length===realCount&&!db.entries.some(e=>e.name==='青木'),'練習: 「練習を終わる」で本番の予約に戻る');
     check(localStorage.getItem(KEY)===realRaw,'練習: 終わった後も本番の保存データは変わっていない');
   }
 
@@ -3351,6 +3396,118 @@ if(location.search.includes('test=1')) (async()=>{
     $('bookBtn').click();
     db.entries=db.entries.filter(e=>!['bk-1','bk-2'].includes(e.id)&&e.name!=='予約帳から作成');
   }
+
+  /* ==============================================================
+     バッチ7: 7.1〜7.4
+     ============================================================== */
+  /* --- 7.1 卓番の並びを逆にする（座敷以外） --- */
+  const b7CounterRow = document.querySelector('.main-map .row[aria-label="カウンター"]');
+  check(b7CounterRow && [...b7CounterRow.querySelectorAll('.seat')].map(s=>s.dataset.no).join() === '7,6,5,4,3,2,1', '7.1: カウンターの並びが左から7→1');
+  const b7KoagariRow = document.querySelector('.main-map .row[aria-label="小上り"]');
+  check(b7KoagariRow && [...b7KoagariRow.querySelectorAll('.seat')].map(s=>s.dataset.no).join() === '16,15,14,13,12,11', '7.1: 小上りの並びが左から16→11');
+  const b7TblRow = document.querySelector('.main-map .row[aria-label="テーブル"]');
+  check(b7TblRow && [...b7TblRow.querySelectorAll('.seat')].map(s=>s.dataset.no).join() === '10,9,8', '7.1: テーブルの並びが左から10→8');
+  const b7ZashikiCol = document.querySelector('.zashiki-column');
+  check(b7ZashikiCol && [...b7ZashikiCol.querySelectorAll('.seat')].map(s=>s.dataset.no).join() === '17,18,19,20', '7.1: 座敷の並びは17→20のまま');
+
+  /* --- 7.2 飲み放題の残り分数を消さない --- */
+  date = today(); weekStart = mondayOf(date); view = 'seat'; draw();
+  const b72Seat = '8';
+  document.querySelector(`.seat[data-no="${b72Seat}"]`).click();
+  $('frm').name.value = '飲み放題客';
+  $('frm').querySelector('button[value="ok"]').click();
+  const b72Entry = db.entries.find(e => e.name === '飲み放題客');
+  draw();
+  const b72Chip = document.querySelector(`.seat[data-no="${b72Seat}"] .chip[data-entry-id="${b72Entry.id}"]`);
+  b72Chip.click();
+  [...$('#actBtns').querySelectorAll('button')].find(b => b.textContent === '使用中にする').click();
+  draw();
+  document.querySelector(`.seat[data-no="${b72Seat}"] .chip[data-entry-id="${b72Entry.id}"]`).click();
+  const b72StartTime = 1700000000000;
+  const b72OrigNowMs = nowMs;
+  nowMs = () => b72StartTime;
+  $('actTimers').querySelector('#btnNomiStart').click();
+  nowMs = () => b72StartTime + 80 * 60 * 1000;
+  draw();
+  const b72WarnBadge = document.querySelector(`.seat[data-no="${b72Seat}"] .chip[data-entry-id="${b72Entry.id}"] .badge.nomi-warn`);
+  check(b72WarnBadge && b72WarnBadge.textContent === 'まもなくラストオーダー あと10分', '7.2: 80分経過で「まもなくラストオーダー あと10分」がチップに出る');
+  nowMs = b72OrigNowMs;
+  leave(b72Entry);
+
+  /* --- 7.3 名前の末尾に「さん」を付ける（表示のみ） --- */
+  // 1) 青木 → 青木さん、保存値は青木のまま
+  document.querySelector('.seat[data-no="7"]').click();
+  check($('dlg').open, '7.3: 席7クリックで予約作成が開く');
+  $('frm').name.value = '青木';
+  $('frm').querySelector('button[value="ok"]').click();
+  const b73Aoki = db.entries.find(e => e.name === '青木');
+  check(b73Aoki && b73Aoki.name === '青木', '7.3: 保存値は「青木」のまま');
+  draw();
+  const b73ChipAoki = document.querySelector(`.seat[data-no="7"] .chip[data-entry-id="${b73Aoki.id}"]`);
+  check(b73ChipAoki && b73ChipAoki.querySelector('.chip-name')?.textContent === '青木さん', '7.3: チップ表示は「青木さん」');
+  b73ChipAoki.click();
+  [...$('#actBtns').querySelectorAll('button')].find(b => b.textContent === '編集').click();
+  check($('editFrm').name.value === '青木', '7.3: 編集画面の名前入力欄には保存値「青木」が入る');
+  check($('editFrm').name.placeholder === '名字だけでOK（さんは自動）', '7.3: 編集画面の名前placeholderに「名字だけでOK（さんは自動）」');
+  check($('editFrm').querySelector('h3')?.textContent.includes('青木さん'), '7.3: 編集画面の見出しに「青木さん」');
+  $('editFrm').querySelector('button[value="close"]').click();
+
+  // 2) 田中様 → 田中様
+  document.querySelector('.seat[data-no="6"]').click();
+  $('frm').name.value = '田中様';
+  $('frm').querySelector('button[value="ok"]').click();
+  const b73Tanaka = db.entries.find(e => e.name === '田中様');
+  check(b73Tanaka && b73Tanaka.name === '田中様', '7.3: 保存値は「田中様」のまま');
+  draw();
+  const b73ChipTanaka = document.querySelector(`.seat[data-no="6"] .chip[data-entry-id="${b73Tanaka.id}"]`);
+  check(b73ChipTanaka && b73ChipTanaka.querySelector('.chip-name')?.textContent === '田中様', '7.3: チップ表示は「田中様」');
+
+  // 3) 佐藤さん → 佐藤さん
+  document.querySelector('.seat[data-no="5"]').click();
+  $('frm').name.value = '佐藤さん';
+  $('frm').querySelector('button[value="ok"]').click();
+  const b73Sato = db.entries.find(e => e.name === '佐藤さん');
+  check(b73Sato && b73Sato.name === '佐藤さん', '7.3: 保存値は「佐藤さん」のまま');
+  draw();
+  const b73ChipSato = document.querySelector(`.seat[data-no="5"] .chip[data-entry-id="${b73Sato.id}"]`);
+  check(b73ChipSato && b73ChipSato.querySelector('.chip-name')?.textContent === '佐藤さん', '7.3: チップ表示は「佐藤さん」');
+
+  // 4) dispName の各敬称チェック
+  check(dispName('花子ちゃん') === '花子ちゃん' && dispName('太郎くん') === '太郎くん' && dispName('株式会社一平御中') === '株式会社一平御中', '7.3: ちゃん・くん・御中はそのまま');
+
+  /* --- 7.4 予約の日付をドラッグで変える --- */
+  const getB74TargetBtn = () => [...document.querySelectorAll('#dates button[data-date]')].find(b => b.dataset.date > date);
+  check(!!getB74TargetBtn(), '7.4: 明日以降の日付タブが存在する');
+  const b74TargetDate = getB74TargetBtn().dataset.date;
+
+  // 1) 保留の予約を明日のタブへ → 日付が変わる
+  const b74Hold = entry('b74-hold', '保留移動');
+  db.entries.push(b74Hold); save(); draw();
+  const b74HoldHandle = document.querySelector('#resList .item[data-entry-id="b74-hold"] .drag-handle') || document.querySelector('#resList .item[data-entry-id="b74-hold"]');
+  dragFromTo(b74HoldHandle, getB74TargetBtn());
+  check(b74Hold.date === b74TargetDate, '7.4: 保留の予約を明日のタブへドラッグすると日付が変わる');
+  check($('hint').textContent.includes('保留移動さんを') && $('hint').textContent.includes('へ移しました'), '7.4: #hintに移動の通知文が出る');
+
+  // 2) 配席済みのチップを明日のタブへ → 日付が変わり卓が外れる
+  const b74Seat = entry('b74-seat', '配席移動', ['9']);
+  db.entries.push(b74Seat); save(); draw();
+  const b74SeatChip = document.querySelector('.seat[data-no="9"] .chip[data-entry-id="b74-seat"]');
+  dragFromTo(b74SeatChip, getB74TargetBtn());
+  check(b74Seat.date === b74TargetDate && b74Seat.tables.length === 0, '7.4: 配席済みのチップを明日のタブへドラッグすると日付が変わり卓が外れる');
+
+  // 3) 元に戻すで戻る
+  $('undoBtn').click();
+  const b74Restored = db.entries.find(e => e.id === 'b74-seat');
+  check(b74Restored && b74Restored.date === date && b74Restored.tables.join() === '9', '7.4: 元に戻すで日付と卓番号が元に戻る');
+
+  // 4) 使用中は変わらない
+  const b74Arrived = entry('b74-arrived', '使用中移動不可', ['10']);
+  b74Arrived.arrived = true;
+  db.entries.push(b74Arrived); draw();
+  const b74ArrivedChip = document.querySelector('.seat[data-no="10"] .chip[data-entry-id="b74-arrived"]');
+  dragFromTo(b74ArrivedChip, getB74TargetBtn());
+  check(b74Arrived.date === date && b74Arrived.tables.includes('10'), '7.4: 使用中の予約は日付が変わらない');
+  check($('hint').textContent === '使用中の予約は日付を変えられません', '7.4: 使用中の予約は日付変更不可のヒントが出る');
 
   db=JSON.parse(bk);date=oldDate;weekStart=oldWeekStart;save();draw();
   window.alert=_origAlert;
