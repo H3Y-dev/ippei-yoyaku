@@ -42,6 +42,8 @@ header h1{font-size:1em;margin:0 .4em 0 0;font-weight:700;letter-spacing:.22em}
 header h1{order:-2}
 #awakeBtn,#practiceBtn{order:-1}
 #hdrMoreBtn{display:none}
+#cxMini{display:none;padding:.15em .45em;font-size:1em}
+.res-count{display:none}
 #hdrMoreBtn.off{border-color:var(--enji-label);color:var(--enji-label)}
 
 #dates{display:flex;gap:4px;padding:.4em .6em;flex:none;align-items:center}
@@ -71,13 +73,13 @@ header h1{order:-2}
 .book-grid .day.today{outline:3px solid var(--karashi);outline-offset:-3px}
 .book-grid .day.has{background:color-mix(in srgb,var(--enji) 30%,var(--sumi-lit));border-color:color-mix(in srgb,var(--enji-label) 60%,transparent)}
 .book-grid .day .cnt{display:flex;align-items:baseline;gap:.35em;margin-top:auto;color:var(--kinari)}
-.book-grid .day .cnt{margin-top:0}
+.book-grid .day .cnt{margin-top:0;flex-wrap:nowrap;white-space:nowrap;min-width:0}  /* 9.7: 「12組」「40名」を折らない（入らなければ drawBook が縮める） */
 .book-grid .day .cnt .kumi{font-size:1.3em;line-height:1}
 .book-grid .day .cnt .mei{font-size:.95em;font-weight:700;opacity:.9}
 .book-grid .bars{display:flex;align-items:flex-end;gap:2px;height:1.5em;margin-top:auto}
 .book-grid .bar{flex:1;background:var(--karashi);height:calc(var(--h)*100%);min-height:2px;border-radius:2px 2px 0 0}
 .book-grid .bar[data-n="0"]{background:rgba(255,255,255,.15)}
-.book-grid .bar-lab{display:flex;justify-content:space-between;font-size:.55em;opacity:.7;line-height:1;color:var(--kinari)}
+.book-grid .bar-lab{display:flex;justify-content:space-between;font-size:max(11px,.58em);opacity:.7;line-height:1;color:var(--kinari)}
 .book-grid .day.other{opacity:.35}
 .book-grid .day.other .dn{font-size:1.05em}
 .book-grid .day.closed{background:transparent;border-style:dashed;align-items:center;justify-content:center;opacity:.55}
@@ -131,7 +133,7 @@ header h1{order:-2}
 .seat[data-g="1"]{--g:#E0A526}  /* 小上り 11〜16: 山吹 */
 .seat[data-g="2"]{--g:#7FB069}  /* テーブル 8〜10: 萌黄 */
 .seat[data-g="3"]{--g:#D98A92}  /* カウンター 1〜7: 薄紅 */
-.seat[data-g]:not([data-g="-1"]){box-shadow:inset 8px 0 0 var(--g);padding-left:11px;background-image:linear-gradient(color-mix(in srgb,var(--g) 12%,transparent),color-mix(in srgb,var(--g) 12%,transparent))}
+.seat[data-g]:not([data-g="-1"]){box-shadow:inset 7px 0 0 var(--g);padding-left:9px;background-image:linear-gradient(color-mix(in srgb,var(--g) 12%,transparent),color-mix(in srgb,var(--g) 12%,transparent))}
 .seat[data-g]:not([data-g="-1"]) .no span{color:var(--g)}
 .seat.used[data-g] .no span{color:var(--kinari)}
 .seat.has-next{border-color:var(--moegi)}
@@ -143,11 +145,13 @@ header h1{order:-2}
 .seat .no{font-size:1.15em;font-weight:700;line-height:1;display:flex;gap:.25em;align-items:center}
 .seat .no em{font-style:normal;font-size:.6em;color:var(--ao);font-weight:600;white-space:nowrap}
 .seat .as{flex:1;min-height:0;display:flex;flex-direction:column;gap:2px;margin-top:2px;overflow:hidden}
-.seat-empty{display:flex;align-items:center;justify-content:center;flex:1;min-height:0;color:var(--kinari);opacity:.35;font-size:.85em;letter-spacing:.05em;white-space:nowrap}
-.chip{border-left:5px solid;border-radius:4px;background:var(--sumi-lit);padding:2px 4px;font-size:1em;
+/* 9.5: 空き卓は「＋」だけ薄く。予約の入った卓（明るい枠のチップ）とひと目で分ける */
+.seat-empty{display:flex;align-items:center;justify-content:center;flex:1;min-height:0;color:var(--kinari);opacity:.22;font-size:1.6em;font-weight:300;line-height:1;white-space:nowrap}
+.chip{border-left:4px solid;border-radius:4px;background:var(--sumi-lit);padding:2px 3px;font-size:1em;
   line-height:1.1;overflow:hidden;touch-action:none;
-  flex:1;min-height:0;display:flex;flex-direction:column;justify-content:center;cursor:grab;
+  flex:1;min-height:0;display:flex;flex-direction:column;justify-content:safe center;cursor:grab;
   transition:background-color .18s ease,border-color .18s ease,transform .18s ease}
+.chip:not(.arrived){box-shadow:inset 0 0 0 2px color-mix(in srgb,var(--kinari) 55%,transparent)}
 .chip:active{cursor:grabbing}
 .chip.arrived{border-left-color:var(--ao)!important}
 .chip.next{background:var(--sumi-lit)!important;border-left-color:var(--moegi)!important}
@@ -158,43 +162,35 @@ header h1{order:-2}
 @media (prefers-reduced-motion:reduce){.chip.late,.item.late{animation:none;background:#7a1f19}}
 .chip-timers{display:flex;flex-wrap:wrap;gap:2px;align-items:center;margin-top:2px}
 .chip .badge{max-width:100%;white-space:normal;word-break:keep-all;overflow-wrap:anywhere}
-.chip-timers .badge{font-size:clamp(.6em,11cqw,.75em);padding:.1em .3em;border-radius:3px;line-height:1.15}
+/* 9.2: 飲み放題と退席の札は同じ大きさ・同じ太さ（色だけ違う）。大きさは fitSeatText が決める */
+.chip-timers .badge{font-size:.8em;font-weight:700;padding:.1em .3em;border-radius:3px;line-height:1.15}
 .chip.timer-warn{background:color-mix(in srgb,var(--karashi) 30%,var(--sumi-lit))!important;outline:2px solid var(--karashi);outline-offset:-2px}
 .chip.timer-alert{outline:3px solid #ff5a4e;outline-offset:-3px;animation:chip-timer-blink 1.2s ease-in-out infinite}
 @keyframes chip-timer-blink{0%,100%{background:#5a1410}50%{background:#a3221a}}
 @media (prefers-reduced-motion:reduce){.chip.timer-alert{animation:none;background:#7a1a14}}
 .badge.nomi-normal,.badge.limit-normal{background:rgba(255,255,255,.18);color:var(--kinari)}
-.badge.nomi-warn,.badge.limit-warn{background:var(--karashi);color:var(--sumi);font-weight:700}
-.badge.nomi-alert,.badge.limit-alert{background:#8a1c14;color:#fff;font-weight:700;animation:timer-blink 1.2s ease-in-out infinite}
+.badge.nomi-warn,.badge.limit-warn{background:var(--karashi);color:var(--sumi)}
+.badge.nomi-alert,.badge.limit-alert{background:#8a1c14;color:#fff;animation:timer-blink 1.2s ease-in-out infinite}
 @keyframes timer-blink{0%,100%{background:#8a1c14}50%{background:#b3261e}}
 @media (prefers-reduced-motion:reduce){.badge.nomi-alert,.badge.limit-alert{animation:none;background:#8a1c14}}
-.chip.solo .chip-name{font-size:clamp(1em,22cqw,1.75em)}
-.chip.solo .chip-meta{flex-direction:row;gap:.5em;font-size:clamp(.85em,13cqw,1.2em);margin-top:.15em}
-.chip.solo .chip-time{order:-1}
-.chip.two-line .chip-name{font-size:clamp(.9em,16cqw,1.2em)}
-@container (max-width:150px){
-  .chip.solo .chip-meta{flex-direction:column;gap:0}
-  .chip.solo .chip-time{order:0}
-}
-@container (max-width:120px){
-  .chip .l1{flex-wrap:wrap;white-space:normal}
-  .chip-name{white-space:normal;overflow-wrap:anywhere;text-overflow:clip}
-}
 .chip>*{flex-shrink:0}
 .chip .l1{display:flex;align-items:center;flex-wrap:wrap;gap:.15em;min-width:0;white-space:normal}
-.chip-name{min-width:0;max-width:100%;display:block;white-space:normal;overflow-wrap:anywhere;font-weight:700;padding:.2em 0}
-.chip-meta{display:flex;flex-direction:column;flex-wrap:wrap;gap:1px;min-width:0}
-.chip-people,.chip-time{min-width:0;max-width:100%;white-space:normal;overflow-wrap:anywhere;font-weight:600}
-.chip-tbls{font-size:clamp(.6em,10cqw,.85em);line-height:1.15;overflow-wrap:anywhere;opacity:.9;flex:none}
+.chip-name{min-width:0;max-width:100%;display:block;white-space:normal;overflow-wrap:anywhere;font-weight:700;font-size:1.35em;padding:.05em 0}
+/* 9.1: 名字は途中で折らない（下限の大きさでも入らないときだけ fitSeatText が name-wrap を付けて折り返しを許す） */
+.chip .name-main{white-space:nowrap}
+.chip.name-wrap .name-main{white-space:normal}
+/* 9.1: 時間→人数の順。横に入れば1行、入らなければ時間の下に人数 */
+.chip-meta{display:flex;flex-direction:row;flex-wrap:wrap;column-gap:.4em;row-gap:0;min-width:0}
+.chip-time{white-space:nowrap;font-weight:600}
+.chip-people{min-width:0;max-width:100%;white-space:normal;word-break:keep-all;overflow-wrap:anywhere;font-weight:600}
+.chip-tbls{font-size:.75em;line-height:1.15;overflow-wrap:anywhere;opacity:.9;flex:none}
 .chip-note{color:var(--karashi);font-weight:600;font-size:.8em;margin-top:.1em;
   white-space:normal;overflow-wrap:anywhere;min-width:0}
-.chip.two-line .chip-note{white-space:nowrap}
-.chip.two-line{padding:1px 3px;font-size:1.05em}
-.chip.two-line .chip-meta{flex-direction:row;gap:.35em}
-.chip.two-line .chip-time{order:-1}
-#map .main-map .row:nth-child(3) .chip{border-left-width:3px;padding:1px 0;font-size:.85em}
-#map .main-map .row:nth-child(3) .l1{position:relative}
-#map .main-map .row:nth-child(3) .chip-name{padding-left:.15em}
+.chip.two-line{padding:1px 3px}
+.chip.two-line .chip-name{font-size:1.15em}
+/* カウンターは一番細いので、枠の内側の余白を詰めて名字（3文字）を15px以上で1行に入れる */
+#map .main-map .row:nth-child(3) .seat[data-g]{padding:2px 1px 2px 8px}
+#map .main-map .row:nth-child(3) .chip{border-left-width:3px;padding:1px 1px 1px 2px}
 .drag-preview{position:fixed;z-index:10;pointer-events:none;max-width:12em;padding:.25em .45em;border:1px solid var(--enji);
   border-radius:6px;background:var(--sumi-lit);color:var(--kinari);font-size:.85em;box-shadow:0 2px 7px rgba(20,12,8,.55)}
 .extra{display:flex;flex:1;min-width:0;gap:2px}
@@ -232,7 +228,9 @@ body.practice header{background:color-mix(in srgb,var(--karashi) 22%,var(--sumi-
 @media (prefers-reduced-motion:reduce){.tut-target{animation:none}}
 .awake-btn{font-size:.8em;padding:.2em .6em}
 .awake-btn.off{border-color:var(--enji-label);color:var(--enji-label)}
-#bkpOpen.warn{border-color:var(--enji);background:var(--enji);color:var(--kinari);font-weight:700}
+/* 9.7b: 席図の下のバックアップは灰色の枠だけ（主操作の赤ベタにしない）。しばらく取っていないときは文字色だけで知らせる */
+#bkpOpen{background:transparent;border-color:var(--ash);color:var(--kinari-muted)}
+#bkpOpen.warn{color:var(--enji-label)}
 #bkpLastExport.warn{color:var(--enji-label);font-weight:700}
 #undoBtn:not(:disabled){border-color:var(--karashi);color:var(--karashi);font-weight:700}
 .not-today-bar{background:var(--enji);color:var(--kinari);font-size:.82em;font-weight:700;padding:.2em .6em;text-align:center;flex:none;letter-spacing:.05em}
@@ -241,8 +239,10 @@ body.practice header{background:color-mix(in srgb,var(--karashi) 22%,var(--sumi-
 #exNo,#exAdd,#bkpOpen{flex:none}
 .lg-item{display:inline-flex;align-items:center;gap:.2em;white-space:nowrap}
 .lg-swatch{display:inline-block;width:11px;height:11px;border-radius:3px;flex:none}
-.lg-empty{background:var(--sumi-lit);border:1px solid var(--ash)}
-.lg-res{background:#2D2420;border:1px solid var(--ash)}
+/* 9.5: 凡例の見本も実物どおり。空き＝暗い地に薄い「＋」、予約＝明るい枠 */
+.lg-empty{background:var(--sumi-lit);border:1px solid var(--ash);position:relative}
+.lg-empty::after{content:"＋";position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:9px;line-height:1;color:var(--kinari);opacity:.45}
+.lg-res{background:var(--sumi-lit);border:2px solid color-mix(in srgb,var(--kinari) 55%,transparent)}
 .lg-used{background:var(--ao);border:1px solid #6FA8EC}
 .lg-next{background:var(--moegi)}
 .lg-wait{background:var(--karashi)}
@@ -258,12 +258,23 @@ dialog{border:1px solid var(--ash);border-radius:14px;padding:0;max-width:620px;
 dialog::backdrop{background:#0006}
 form.f{padding:.7em 1em;display:grid;grid-template-columns:5.5em 1fr;gap:.45em .7em;align-items:center}
 form.f h3{grid-column:1/-1;margin:0 0 .2em}
+form.f>label{align-self:start;margin-top:.6em} /* 見出しは行の上端に（時間の「未定」が子どもの行に見えないように） */
 form.f textarea{resize:vertical}
 form.f .wide{grid-column:1/-1;display:flex;gap:.5em;justify-content:flex-end}
 form.f .wide:last-of-type{position:sticky;bottom:0;background:var(--sumi-lit);padding:.4em 0;margin-bottom:-.7em;border-top:1px solid var(--ash);z-index:2}
 form.f .wide button.on{order:9}
 form.f .wide button.on{order:9}
 form.f label{color:var(--kinari);opacity:.75;font-size:.9em}
+/* 9.7b: 電話待ちは行全体を押せるトグル。入っているかは大きなチェックと行の色で分かる */
+form.f label.wait-toggle{grid-column:1/-1;display:flex;align-items:center;gap:.6em;min-height:48px;padding:.3em .7em;border:1px solid var(--ash);border-radius:10px;background:var(--sumi);opacity:1;font-size:1em;cursor:pointer}
+.wait-toggle input{width:26px;height:26px;margin:0;flex:none;accent-color:var(--karashi)}
+.wait-toggle .wt-text{flex:1;font-weight:600}
+.wait-toggle:has(input:checked){border-color:var(--karashi);background:color-mix(in srgb,var(--karashi) 22%,var(--sumi))}
+/* 9.7c: 編集画面の飲み放題の行 */
+.edit-gap{flex:1;min-width:2em}
+.nomi-row{display:flex;align-items:center;gap:.5em;flex-wrap:wrap}
+.nomi-row button{min-height:44px}
+.nomi-row .nomi-now{font-weight:700;color:var(--karashi)}
 form.f .message{grid-column:1/-1;margin:0;color:var(--enji-label);font-size:.85em}
 .snapshot-head{grid-column:1/-1;display:flex;align-items:center;gap:.5em;margin-top:.35em}
 .snapshot-head strong{flex:1}
@@ -280,9 +291,21 @@ form.f .message{grid-column:1/-1;margin:0;color:var(--enji-label);font-size:.85e
 .btn-group button,.btn-grid button{padding:.25em .3em;font-size:.85em;min-height:36px;border-radius:6px;line-height:1.1}
 .btn-group button.on,.btn-grid button.on{background:var(--enji);border-color:var(--enji);color:var(--kinari);font-weight:700}
 #actBtns button{min-height:56px;font-size:1.1em;padding:.5em 1em;border-radius:10px}
-#actBtns button.btn-cancel-act{margin-top:16px;border:1px dashed var(--enji-label);color:var(--enji-label);background:transparent}
-#actBtns button.btn-cancel-act:active{background:rgba(217,138,146,.15)}
-#actTimers{margin-top:.6em;padding-top:.6em;border-top:1px solid var(--ash);display:flex;flex-direction:column;gap:.5em;font-size:.9em}
+/* 9.6: 予約を取り消すは一番下。区切り線と間隔で「閉じる」や飲み放題のボタンから離す */
+#actDanger{margin-top:18px;padding-top:18px;border-top:1px solid var(--ash);display:flex;flex-direction:column}
+#actDanger:empty{display:none}
+#actDanger button{min-height:56px;font-size:1.1em;padding:.5em 1em;border-radius:10px}
+button.btn-cancel-act{border:1px dashed var(--enji-label);color:var(--enji-label);background:transparent}
+button.btn-cancel-act:active{background:rgba(217,138,146,.15)}
+/* 9.6: タイトルの下に時間・人数・要望・タイマーの今の値 */
+#actInfo{grid-column:1/-1;display:flex;flex-direction:column;gap:.15em;margin:-.1em 0 .5em;padding:.45em .6em;border:1px solid var(--ash);border-radius:8px;background:var(--sumi)}
+#actInfo:empty{display:none}
+#actInfo .ai-meta{font-size:1.15em;font-weight:700}
+#actInfo .ai-note{color:var(--karashi);font-weight:600;white-space:pre-line;overflow-wrap:anywhere}
+#actInfo .ai-timers{display:flex;flex-wrap:wrap;gap:.3em}
+#actInfo .badge{font-size:.85em}
+#actTimers{margin-top:18px;padding-top:18px;border-top:1px solid var(--ash);display:flex;flex-direction:column;gap:.5em;font-size:.9em}
+#actTimers:empty{display:none}
 #actTimers .timer-sec{display:flex;flex-direction:column;gap:.3em}
 #actTimers .timer-lab{color:var(--kinari);opacity:.85;font-size:.85em}
 #actTimers .timer-row{display:flex;gap:4px;flex-wrap:wrap}
@@ -306,19 +329,24 @@ form.f .message{grid-column:1/-1;margin:0;color:var(--enji-label);font-size:.85e
   #body{flex-direction:column;gap:.3em}
   #right{order:0}
   #grip{order:1;width:100%;height:1.8em;writing-mode:horizontal-tb;letter-spacing:.15em}
-  #left{order:2;width:100%;min-width:0;max-width:none;height:9em;max-height:24vh;flex:none;flex-direction:row;gap:.4em}
-  #left>.box:first-child{min-width:0}
-  #left>.box:last-child{width:9em}
+  #left{order:2;width:100%;min-width:0;max-width:none;height:auto;max-height:12em;flex:none;flex-direction:row;gap:.4em}
+  #left>.box:first-child{min-width:0;flex:1}
+  #left>.box:last-child{display:none;width:15em}
+  #left:has(#cxList:not([hidden]))>.box:last-child{display:flex}
   #left>.box:last-child h2{flex-wrap:wrap}
   #left .box>h2{font-size:.78em;padding:.2em .45em}
-  #resList{flex:1;min-height:0;flex-direction:row;overflow-x:auto;overflow-y:hidden;align-items:stretch}
-  #resList .item{flex:0 0 14em;width:14em;overflow-y:auto}
+  #cxMini{display:inline-block}
+  .res-count{display:inline}
+  #resList{flex:1;min-height:0;flex-direction:row;overflow:auto;align-items:flex-start}
+  #resList .item{flex:0 0 calc((100% - .7em) / 3);width:calc((100% - .7em) / 3)}
   #left .item .tbl{display:none}
-  #left .item .acts button{min-height:36px}
+  #left .item .acts{gap:.25em}
+  #left .item .acts button{min-height:40px;font-size:.75em;padding:.1em .4em}
   #mapBar{flex-wrap:wrap;overflow:visible!important;gap:.3em!important;white-space:normal!important}
   .legend{flex-wrap:wrap;overflow:visible;gap:.35em}
   .lg-guide{display:none}
   .zashiki-column{width:6em}
+  .book-hint{display:none}
 }
 /* 自己チェックでも端末の向きと同じ規則を使う。 */
 body.portrait-test header{position:relative;gap:.2em}
@@ -330,19 +358,24 @@ body.portrait-test #hdrMore button{order:0;font-size:1em;min-height:44px;text-al
 body.portrait-test #body{flex-direction:column;gap:.3em}
 body.portrait-test #right{order:0}
 body.portrait-test #grip{order:1;width:100%;height:1.8em;writing-mode:horizontal-tb;letter-spacing:.15em}
-body.portrait-test #left{order:2;width:100%;min-width:0;max-width:none;height:9em;max-height:24vh;flex:none;flex-direction:row;gap:.4em}
-body.portrait-test #left>.box:first-child{min-width:0}
-body.portrait-test #left>.box:last-child{width:9em}
+body.portrait-test #left{order:2;width:100%;min-width:0;max-width:none;height:auto;max-height:12em;flex:none;flex-direction:row;gap:.4em}
+body.portrait-test #left>.box:first-child{min-width:0;flex:1}
+body.portrait-test #left>.box:last-child{display:none;width:15em}
+body.portrait-test #left:has(#cxList:not([hidden]))>.box:last-child{display:flex}
 body.portrait-test #left>.box:last-child h2{flex-wrap:wrap}
 body.portrait-test #left .box>h2{font-size:.78em;padding:.2em .45em}
-body.portrait-test #resList{flex:1;min-height:0;flex-direction:row;overflow-x:auto;overflow-y:hidden;align-items:stretch}
-body.portrait-test #resList .item{flex:0 0 14em;width:14em;overflow-y:auto}
+body.portrait-test #cxMini{display:inline-block}
+body.portrait-test .res-count{display:inline}
+body.portrait-test #resList{flex:1;min-height:0;flex-direction:row;overflow:auto;align-items:flex-start}
+body.portrait-test #resList .item{flex:0 0 calc((100% - .7em) / 3);width:calc((100% - .7em) / 3)}
 body.portrait-test #left .item .tbl{display:none}
-body.portrait-test #left .item .acts button{min-height:36px}
+body.portrait-test #left .item .acts{gap:.25em}
+body.portrait-test #left .item .acts button{min-height:40px;font-size:.75em;padding:.1em .4em}
 body.portrait-test #mapBar{flex-wrap:wrap;overflow:visible!important;gap:.3em!important;white-space:normal!important}
 body.portrait-test .legend{flex-wrap:wrap;overflow:visible;gap:.35em}
 body.portrait-test .lg-guide{display:none}
 body.portrait-test .zashiki-column{width:6em}
+body.portrait-test .book-hint{display:none}
 </style>
 </head>
 <body>
@@ -388,7 +421,7 @@ body.portrait-test .zashiki-column{width:6em}
 <div id="body">
   <div id="left">
     <div class="box" style="flex:1">
-      <h2>卓未定の予約 <span class="grow"></span><button id="addRes">＋ 予約</button></h2>
+      <h2><span id="resHead">卓未定の予約</span> <span class="grow"></span><button id="cxMini" type="button">終了・取消(0)</button><button id="addRes">＋ 予約</button></h2>
       <div class="list" id="resList"></div>
     </div>
     <div class="box" style="flex:none">
@@ -423,8 +456,10 @@ body.portrait-test .zashiki-column{width:6em}
 <dialog id="actDlg"><form class="f" method="dialog" id="actFrm">
   <h3 id="actTitle"></h3>
   <div id="actState" style="grid-column:1/-1;font-size:.9em;color:var(--kinari-muted);margin:-.2em 0 .4em"></div>
+  <div id="actInfo"></div>
   <div id="actBtns" style="display:flex;flex-direction:column;gap:.5em;width:100%;grid-column:1/-1"></div>
   <div id="actTimers" style="grid-column:1/-1;width:100%"></div>
+  <div id="actDanger" style="grid-column:1/-1;width:100%"></div>
 </form></dialog>
 <dialog id="editDlg"><form class="f" method="dialog" id="editFrm" autocomplete="off"></form></dialog>
 <div id="tut" class="tut" hidden popover="manual" role="dialog" aria-live="polite">
@@ -502,9 +537,9 @@ function normalizeDb(d){
       e.time = typeof e.time === 'string' ? e.time : '';
       e.note = typeof e.note === 'string' ? e.note : '';
       e.people = (typeof e.people === 'number' && !isNaN(e.people)) ? e.people : null;
-      if(e.people === null){
+      if(e.people === null && e.children !== null){
         e.children = 0;
-      } else {
+      } else if(e.children !== null){
         const c = (typeof e.children === 'number' && Number.isInteger(e.children)) ? e.children : 0;
         e.children = (c >= 1 && c <= e.people) ? c : 0;
       }
@@ -532,8 +567,9 @@ function normalizeDb(d){
 
 function peopleText(e){
   if(!e || e.people === null || e.people === undefined) return '人数未定';
+  if(e.children === null) return `${e.people}名（子未定）`;
   const c = e.children || 0;
-  return c > 0 ? `${e.people}名(子${c})` : `${e.people}名`;
+  return c > 0 ? `${e.people}名（大${e.people-c}・子${c}）` : `${e.people}名`;
 }
 
 /* ---------- 保存 ---------- */
@@ -726,13 +762,31 @@ function getNomiInfo(e){
   const elapsedMs = nowMs() - e.nomiStart;
   const elapsedMin = Math.floor(elapsedMs / 60000);
   if(elapsedMin >= totalMin){
-    return {stage: 3, cls: 'badge nomi-alert', text: `ラストオーダー${extSuffix}`, extra, remMin: 0};
+    return {stage: 3, cls: 'badge nomi-alert', text: `飲み放題 LOの時間です${extSuffix}`, extra, remMin: 0};
   } else if(elapsedMin >= totalMin - NOMI_WARN_MIN){
     const remMin = Math.max(0, totalMin - elapsedMin);
-    return {stage: 2, cls: 'badge nomi-warn', text: `まもなくラストオーダー あと${remMin}分${extSuffix}`, extra, remMin};
+    return {stage: 2, cls: 'badge nomi-warn', text: `飲み放題 LOまで${remMin}分${extSuffix}`, extra, remMin};
   } else {
     const remMin = Math.max(0, totalMin - elapsedMin);
     return {stage: 1, cls: 'badge nomi-normal', text: `飲み放題 あと${remMin}分${extSuffix}`, extra, remMin};
+  }
+}
+
+// 飲み放題を今から始める（操作画面と編集画面の共通処理。9.7c）
+function startNomi(e){e.nomiStart=nowMs();e.nomiExtra=0;save();draw()}
+// 編集画面の「飲み放題」の行。押した瞬間に始める（保存ボタンを待たない）。延長・取り消しは操作画面で
+function fillNomiRow(box,e){
+  box.replaceChildren();
+  const ni=getNomiInfo(e);
+  if(ni){
+    const now=document.createElement('span');now.className='nomi-now';
+    now.textContent='飲み放題中 '+ni.text.replace(/^飲み放題 /,'');
+    box.appendChild(now);
+  }else{
+    const b=document.createElement('button');
+    b.type='button';b.className='btn-nomi-start-edit';b.textContent='飲み放題を始める（90分）';
+    b.onclick=()=>{startNomi(e);fillNomiRow(box,e)};
+    box.appendChild(b);
   }
 }
 
@@ -740,13 +794,13 @@ function getLimitInfo(e){
   if(!e.limitEnd) return null;
   const remMs = e.limitEnd - nowMs();
   if(remMs <= 0){
-    return {stage: 3, cls: 'badge limit-alert', text: '時間です'};
+    return {stage: 3, cls: 'badge limit-alert', text: '退席の時間です'};
   } else if(remMs <= 5 * 60 * 1000){
     const remMin = Math.max(1, Math.ceil(remMs / 60000));
-    return {stage: 2, cls: 'badge limit-warn', text: `あと${remMin}分`};
+    return {stage: 2, cls: 'badge limit-warn', text: `退席まで${remMin}分`};
   } else {
     const remMin = Math.ceil(remMs / 60000);
-    return {stage: 1, cls: 'badge limit-normal', text: `あと${remMin}分`};
+    return {stage: 1, cls: 'badge limit-normal', text: `退席まで${remMin}分`};
   }
 }
 
@@ -817,11 +871,14 @@ function dispName(e){
 }
 function renderName(el,e){
   const name=dispName(e);
+  // 名字（さんの前）を別の要素にして、席のチップでは途中で折らずに測る（9.1）
+  const main=document.createElement('span');main.className='name-main';
   if(name.endsWith('さん')){
     const suffix=document.createElement('span');
     suffix.className='name-suffix';suffix.textContent='さん';
-    el.replaceChildren(document.createTextNode(name.slice(0,-2)),suffix);
-  }else el.textContent=name;
+    main.textContent=name.slice(0,-2);
+    el.replaceChildren(main,suffix);
+  }else{main.textContent=name;el.replaceChildren(main)}
 }
 const hue=id=>{let h=0;for(const c of id)h=(h*31+c.charCodeAt(0))%46;return h};
 const color=id=>`hsl(${hue(id)} 58% 50%)`;
@@ -890,6 +947,10 @@ function itemEl(e){
 function drawLists(){
   const box=document.getElementById('resList');box.innerHTML='';
   const arr=listEntries(date);
+  const waitN=arr.filter(e=>e.kind==='wait').length;
+  // 件数は縦向きの見出しで使う（横向きの左の一覧は今のまま。9.3）
+  $('resHead').innerHTML='卓未定の予約<span class="res-count"></span>';
+  $('resHead').querySelector('.res-count').textContent=` ${arr.length}件`+(waitN?`（電話待ち${waitN}）`:'');
   if(!arr.length){box.innerHTML='<div class="empty">卓未定なし</div>';}
   else{
     arr.sort((a,b)=>(a.time||'zz').localeCompare(b.time||'zz'));
@@ -901,6 +962,7 @@ function drawLists(){
   }
   const vanished=db.entries.filter(e=>e.date===date&&(e.cancelled||e.gone)).slice().reverse();
   document.getElementById('cxHead').firstChild.textContent=`終了・取消 (${vanished.length}) `;
+  $('cxMini').textContent=`終了・取消(${vanished.length})`;$('cxMini').disabled=!vanished.length;
   const cxBtn=document.getElementById('cxToggle');
   const cl=document.getElementById('cxList');
   if(!vanished.length){
@@ -969,6 +1031,7 @@ function openMoreDlg(entries,no){
   title.textContent=`卓 ${no} の予約一覧`;
   stateEl.textContent='操作する予約を選んでください';
   box.replaceChildren();
+  $('actInfo').replaceChildren();$('actDanger').replaceChildren();$('actTimers').replaceChildren();
   entries.forEach(e=>{
     const b=document.createElement('button');
     b.type='button';
@@ -1011,7 +1074,8 @@ function seatEl(arg,jumpEntryIds){
   if(here.length===0){
     const emptyEl=document.createElement('div');
     emptyEl.className='seat-empty';
-    emptyEl.textContent='＋ 予約';
+    emptyEl.textContent='＋';
+    b.setAttribute('aria-label',`卓 ${sortedNos.join('・')} 空き（押すと予約）`);
     as.appendChild(emptyEl);
   } else {
     // チップの並び: 来店済みを上、「次」を下にする（here を arrived 優先で並べてから slice(0,2)）
@@ -1027,7 +1091,7 @@ function seatEl(arg,jumpEntryIds){
       const c=document.createElement('div');
       c.className='chip'+(here.length>1?' two-line':' solo')+(e.arrived?' arrived':'')+(isNext?' next':'')+(isLate(e)?' late':'');
       c.style.borderLeftColor=isNext?'var(--moegi)':(e.arrived?'var(--ao)':(isWait?'var(--karashi)':color(e.id)));
-      c.innerHTML='<div class="l1"><b class="chip-name"></b></div><div class="chip-meta"><span class="chip-people"></span></div>';
+      c.innerHTML='<div class="l1"><b class="chip-name"></b></div><div class="chip-meta"><span class="chip-people"></span></div>';  // 時間は人数の前に入れる（9.1）
       if(isNext){
         const nb=document.createElement('span');
         nb.className='badge next';
@@ -1053,7 +1117,7 @@ function seatEl(arg,jumpEntryIds){
         tblsSpan.textContent=`卓${sortedTbls.join('・')}`;
         c.appendChild(tblsSpan);
       }
-      if(e.time){const time=document.createElement('span');time.className='chip-time';time.textContent=e.time;c.querySelector('.chip-meta').appendChild(time)}
+      if(e.time){const time=document.createElement('span');time.className='chip-time';time.textContent=e.time;c.querySelector('.chip-meta').prepend(time)}
       const note1=(e.note||'').split('\n')[0].trim();
       if(note1){const n=document.createElement('div');n.className='chip-note';n.textContent=note1;c.appendChild(n)}
       if(!e.gone && !e.cancelled){
@@ -1071,12 +1135,6 @@ function seatEl(arg,jumpEntryIds){
             const nb=document.createElement('span');
             nb.className=ni.cls;
             nb.textContent=ni.text;
-            const parts=ni.text.split('ラストオーダー');
-            if(parts.length===2){
-              const word=document.createElement('span');
-              word.style.whiteSpace='nowrap';word.textContent='ラストオーダー';
-              nb.replaceChildren(document.createTextNode(parts[0]),word,document.createTextNode(parts[1]));
-            }
             timersDiv.appendChild(nb);
           }
         }
@@ -1218,6 +1276,11 @@ function drawBook(){
     }
     g.appendChild(b);
   }
+  // 9.7: 「12組」「40名」を折らずに、入らないマスだけ縮める
+  g.querySelectorAll('.day .cnt:not(.closed-label)').forEach(c=>{
+    c.style.fontSize='';
+    for(let k=1;k>.6&&c.scrollWidth>c.clientWidth+.5;){k*=.9;c.style.fontSize=k+'em'}
+  });
 }
 function fitSeatText(){
   document.querySelectorAll('#map .seat .no').forEach(no=>{
@@ -1229,21 +1292,60 @@ function fitSeatText(){
     }
     if(no.scrollWidth>no.clientWidth)no.style.flexWrap='wrap';
   });
-  const records=[...document.querySelectorAll('#map .chip,#map .seat-empty')].map(el=>{
-    const nodes=[el,...el.querySelectorAll('.chip-name,.chip-meta,.chip-tbls,.chip-note,.badge')];
-    nodes.forEach(n=>n.style.fontSize='');
-    return {el,nodes,scale:1};
-  });
-  // cqw は親の文字サイズでは縮まないので、基準の計算値を各要素に適用する。
-  records.forEach(r=>r.sizes=r.nodes.map(n=>parseFloat(getComputedStyle(n).fontSize)));
-  let pending=records.filter(r=>r.el.clientHeight>0);
-  while(pending.length){
-    pending=pending.filter(({el,scale})=>scale>.55&&(el.scrollHeight>el.clientHeight||el.scrollWidth>el.clientWidth));
-    pending.forEach(r=>{
-      r.scale=Math.max(.55,r.scale*.92);
-      r.nodes.forEach((n,i)=>n.style.fontSize=r.sizes[i]*r.scale+'px');
+  /* 9.1: チップの文字は、マスの幅と高さの両方を使って収まる最大の大きさにする（拡大もする）。
+     同じマスのチップは同じ大きさにそろえる。名前・時間・人数・タイマー札は15px未満にしない。
+     1) 名字を折らずに探す → 2) 下限でも入らなければ名字の折り返しを許す
+     → 3) それでも入らなければ下限を一段下げる → 4) 最後は下限を外して縮める（隠すより小さくても全部出す。バッチ8） */
+  const MIN=15, base=parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--fs'))||19;
+  const roleOf=(n,chip)=>{
+    const two=chip.classList.contains('two-line');
+    // [大きさの比, 下限(段階1・2), 下限(段階3)]
+    if(n.classList.contains('chip-name')) return [two?1.15:1.35,MIN,12];
+    if(n.classList.contains('chip-meta')) return [1,MIN,12];
+    if(n.classList.contains('chip-tbls')) return [.75,11,9];
+    if(n.classList.contains('chip-note')) return [.8,11,9];
+    if(n.closest('.chip-timers')) return [.8,MIN,12];
+    return [.7,12,9]; // 遅れ・次・電話待ちの札
+  };
+  const groups=[...document.querySelectorAll('#map .seat .as')].map(as=>{
+    const chips=[...as.querySelectorAll(':scope>.chip')];
+    if(!chips.length) return null;
+    const parts=[];
+    chips.forEach(chip=>{
+      chip.classList.remove('name-wrap');chip.style.fontSize='';
+      const ns=[...chip.querySelectorAll(':scope>.l1>.chip-name,:scope>.l1>.badge,:scope>.chip-meta,:scope>.chip-tbls,:scope>.chip-note,:scope>.chip-timers>.badge')];
+      if(!ns.length){parts.push({n:chip,ratio:.9,min:12,min3:10});return}   // 「他N件」
+      ns.forEach(n=>{const [ratio,min,min3]=roleOf(n,chip);parts.push({n,ratio,min,min3})});
     });
+    // はみ出しの判定に使う要素（名字・時間・人数は枠の内側の余白まで食い込んでも scrollWidth に出ないため、矩形でも確かめる）
+    const probes=chips.map(c=>[c,[...c.querySelectorAll('.name-main,.name-suffix,.chip-time,.chip-people,.badge,.chip-note,.chip-tbls')]]);
+    return {chips,parts,probes,phase:1};
+  }).filter(g=>g&&g.chips[0].clientHeight>0);
+  const apply=(g,u)=>g.parts.forEach(p=>{p.n.style.fontSize=(g.phase<3?Math.max(p.min,p.ratio*u):g.phase===3?Math.max(p.min3,p.ratio*u):p.ratio*u)+'px'});
+  const PAD=2;   // 予約の明るい枠線（2px）に文字が重ならない余白
+  const fits=g=>{
+    if(!g.chips.every(c=>c.scrollHeight<=c.clientHeight+.5&&c.scrollWidth<=c.clientWidth+.5)) return false;
+    return g.probes.every(([chip,ns])=>{
+      const c=chip.getBoundingClientRect();
+      return ns.every(n=>{const r=n.getBoundingClientRect();return r.right<=c.right-PAD+.5&&r.bottom<=c.bottom-PAD+.5&&r.top>=c.top+PAD-.5});
+    });
+  };
+  const HI=base*1.3, LO=8, FLOOR=4;
+  // まず最大の大きさで入るか
+  groups.forEach(g=>apply(g,HI));
+  let todo=groups.filter(g=>!fits(g));
+  todo.forEach(g=>{g.lo=LO;g.hi=HI;apply(g,LO)});
+  // 下限（名字は1行）でも入らない → 名字の折り返しを許す
+  todo.filter(g=>!fits(g)).forEach(g=>{g.phase=2;g.chips.forEach(c=>c.classList.add('name-wrap'))});
+  todo.forEach(g=>{if(g.phase===2)apply(g,LO)});
+  todo.filter(g=>g.phase===2&&!fits(g)).forEach(g=>{g.phase=3;apply(g,LO)});
+  todo.filter(g=>g.phase===3&&!fits(g)).forEach(g=>{g.phase=4;g.lo=FLOOR;g.hi=LO});
+  // 入る最大の大きさを二分探索（全マス同時に書いてから測り、再計算を1回ずつにまとめる）
+  for(let i=0;i<7&&todo.length;i++){
+    todo.forEach(g=>{g.mid=(g.lo+g.hi)/2;apply(g,g.mid)});
+    todo.forEach(g=>{if(fits(g))g.lo=g.mid;else g.hi=g.mid});
   }
+  todo.forEach(g=>apply(g,g.lo));
 }
 let fitFrame=0;
 function scheduleSeatTextFit(){
@@ -1485,6 +1587,17 @@ function openActDlg(e,no){
   stateEl.textContent=`いま：${e.arrived ? '使用中' : 'まだ来店していない予約'}`;
   box.replaceChildren();
   if(timersEl) timersEl.replaceChildren();
+  // 9.6: 時間・人数・要望（全文）・タイマーの今の値を見出しの下に出す
+  const info=$('actInfo');info.replaceChildren();
+  const addInfo=(cls,text)=>{const d=document.createElement('div');d.className=cls;d.textContent=text;info.appendChild(d);return d};
+  addInfo('ai-meta',`${e.time||'時間未定'}　${peopleText(e)}`);
+  if((e.note||'').trim()) addInfo('ai-note','要望: '+e.note.trim());
+  const tInfo=[getNomiInfo(e),getLimitInfo(e)].filter(Boolean);
+  if(tInfo.length){
+    const row=addInfo('ai-timers','');
+    tInfo.forEach(t=>{const sp=document.createElement('span');sp.className=t.cls;sp.textContent=t.text;row.appendChild(sp)});
+  }
+  const danger=$('actDanger');danger.replaceChildren();
   const isToday=date===today();
   const addBtn=(label,cls,fn)=>{
     const b=document.createElement('button');
@@ -1502,8 +1615,14 @@ function openActDlg(e,no){
     else addBtn('連絡済を外す','',()=>{e.called=false;save();draw()});
   }
   addBtn('編集','',()=>{openEdit(e,no)});
-  addBtn('予約を取り消す','btn-cancel-act',()=>cancelEntry(e));
   addBtn('閉じる','',()=>{});
+  // 誤タップ防止: 取り消しは区切りの下、画面の一番下（9.6）
+  {
+    const b=document.createElement('button');
+    b.type='button';b.textContent='予約を取り消す';b.className='btn-cancel-act';
+    b.onclick=()=>{dlg.close();cancelEntry(e)};
+    danger.appendChild(b);
+  }
 
   if(timersEl){ // 飲み放題は使用中でない（来店前の）席でも始められる
     const secNomi=document.createElement('div');
@@ -1513,17 +1632,9 @@ function openActDlg(e,no){
       b.type='button';
       b.id='btnNomiStart';
       b.textContent='飲み放題を始める（90分）';
-      b.onclick=()=>{dlg.close();e.nomiStart=nowMs();e.nomiExtra=0;save();draw()};
+      b.onclick=()=>{dlg.close();startNomi(e)};
       secNomi.appendChild(b);
     } else {
-      const b=document.createElement('button');
-      b.type='button';
-      b.id='btnNomiCancel';
-      b.className='cancel';
-      b.textContent='飲み放題を取り消す';
-      b.onclick=()=>{dlg.close();e.nomiStart=null;e.nomiExtra=0;save();draw()};
-      secNomi.appendChild(b);
-
       const extraLab=document.createElement('div');
       extraLab.className='timer-lab';
       const curExtra=(typeof e.nomiExtra==='number'&&e.nomiExtra>0)?e.nomiExtra:0;
@@ -1630,6 +1741,19 @@ function openActDlg(e,no){
       secLimit.appendChild(b);
     }
     if(e.arrived) timersEl.appendChild(secLimit); // 席を空ける時間は使用中のみ
+    // 9.6: 飲み放題の欄は 延長 → 席を空ける時間 → 最後に「飲み放題を取り消す」
+    if(e.nomiStart){
+      const secNomiCancel=document.createElement('div');
+      secNomiCancel.className='timer-sec';
+      const b=document.createElement('button');
+      b.type='button';
+      b.id='btnNomiCancel';
+      b.className='cancel';
+      b.textContent='飲み放題を取り消す';
+      b.onclick=()=>{dlg.close();e.nomiStart=null;e.nomiExtra=0;save();draw()};
+      secNomiCancel.appendChild(b);
+      timersEl.appendChild(secNomiCancel);
+    }
   }
 
   dlg.showModal();
@@ -1758,27 +1882,36 @@ function dragFromTo(source,target){
 const TIMES=(()=>{const a=[];for(let h=17;h<=21;h++)for(const m of['00','30'])a.push(h+':'+m);return a})();
 const PEOPLE_MAX=50;
 
-// 子供の人数: 大人と同じボタン式（0が既定。触らなければ今まで通り）。5人以上は数字欄
+// 子ども0は閉じて開始。空のhidden inputは未定を表す。
 function createChildPicker(syncInput){
+  const container=document.createElement('div');
+  const label=syncInput.previousElementSibling.previousElementSibling;
   const wrap=document.createElement('div');wrap.className='btn-group';
-  const cur=Number(syncInput.value)||0;
+  const cur=syncInput.value===''?null:Number(syncInput.value)||0;
+  const toggle=document.createElement('button');toggle.type='button';toggle.textContent='＋子ども';
+  const expand=()=>{toggle.remove();label.style.visibility='visible';wrap.style.display='flex'};
+  toggle.onclick=expand;
+  label.style.visibility='hidden';wrap.style.display='none';
+  container.append(toggle,wrap);
+  if(cur===null||cur>0) expand();
   const more=document.createElement('input');
   more.type='number';more.min='5';more.max='99';more.autocomplete='off';more.placeholder='人数';
   more.style.cssText='width:4.5em;display:'+(cur>=5?'inline-block':'none');
   if(cur>=5) more.value=cur;
-  const btns=['0','1','2','3','4','5以上'].map((t,i)=>{
+  const btns=['0','1','2','3','4','5以上','未定'].map((t,i)=>{
     const b=document.createElement('button');b.type='button';b.textContent=t;
-    b.className='p-btn'+((i<5?cur===i:cur>=5)?' on':'');
+    b.className='p-btn'+((i<5?cur===i:i===5?cur>=5:cur===null)?' on':'');
     b.onclick=()=>{
       btns.forEach(x=>x.classList.remove('on'));b.classList.add('on');
-      if(i<5){more.style.display='none';syncInput.value=String(i)}
+      if(i===6){more.style.display='none';syncInput.value=''}
+      else if(i<5){more.style.display='none';syncInput.value=String(i)}
       else{more.style.display='inline-block';more.focus();syncInput.value=more.value||'5'}
     };
     wrap.appendChild(b);return b;
   });
   more.oninput=()=>{syncInput.value=more.value||'5'};
   wrap.appendChild(more);
-  return wrap;
+  return container;
 }
 function createPeoplePicker(initialVal, syncInput){
   const wrap=document.createElement('div');
@@ -1959,13 +2092,14 @@ function openForm(kind,e,forDate,seatNo){
   f.innerHTML=`<h3>${title}</h3>
    <label id="nameLbl">${nameLabelText}</label><input name="name" ${nameRequired?'required':''} autofocus autocomplete="off" autocorrect="off" spellcheck="false" ${isSeat&&isToday?'placeholder="空欄で「来店客」として使用中 / 名字だけでOK（さんは自動）"':'placeholder="名字だけでOK（さんは自動）"'}>
    <label>大人</label><div id="fPeoplePicker"></div><input type="hidden" name="people" autocomplete="off">
-   <label>子供</label><div class="childPicker"></div><input type="hidden" name="children" value="${e?.children||0}" autocomplete="off">
+   <label>子ども</label><div class="childPicker"></div><input type="hidden" name="children" value="${e?.children===null?'':e?.children??0}" autocomplete="off">
    <label>時間</label><div id="fTimePicker"></div><input type="hidden" name="time" autocomplete="off">
-   ${isSeat?'':'<label>電話待ち</label><input type="checkbox" name="wait" autocomplete="off" style="width:auto;justify-self:start" '+(isWaitInitial?'checked':'')+'>'}
+   ${isSeat?'':'<label class="wait-toggle"><input type="checkbox" name="wait" autocomplete="off" '+(isWaitInitial?'checked':'')+'><span class="wt-text">電話待ち（空いたら電話する）</span></label>'}
    <label>電話番号<span class="tel-req" ${isWaitInitial?'':'hidden'}>*</span></label><input name="tel" type="tel" inputmode="tel" autocomplete="off" ${isWaitInitial?'required':''}>
    <label>要望</label><textarea name="note" rows="2" autocomplete="off" autocorrect="off" spellcheck="false"></textarea>
    ${isSeat?'<label>卓</label><div id="fTblPicker" class="tbl-picker"></div>':'<label>卓</label><input name="tables" autocomplete="off" placeholder="空欄なら卓未定">'}
    ${isSeat?'':'<label>日付</label><input name="date" type="date" required>'}
+   ${e&&!e.cancelled&&!e.gone?'<label>飲み放題</label><div class="nomi-row"></div>':''}
    <p class="message" hidden></p>
    <div class="wide">
      <button value="ok" type="submit" class="on" id="frmSaveBtn">保存</button>
@@ -2031,6 +2165,8 @@ function openForm(kind,e,forDate,seatNo){
   }
   if(e){
     for(const k of['name','tel','note']) f[k].value=e[k]??'';
+    const nomiRow=f.querySelector('.nomi-row');
+    if(nomiRow) fillNomiRow(nomiRow,e);
   }
 
   f.name.oninput = updateSaveBtnLabel;
@@ -2088,15 +2224,15 @@ function openForm(kind,e,forDate,seatNo){
 
       const adultVal=peoplePick.getValue();
       const childRaw=parseInt(f.children?f.children.value:'0',10);
-      const childVal=isNaN(childRaw)||childRaw<0?0:childRaw;
+      const childVal=f.children.value===''?null:isNaN(childRaw)||childRaw<0?0:childRaw;
       if(adultVal===null&&childVal>0){
         ev.preventDefault();
         const msg=f.querySelector('.message');
         if(msg){msg.hidden=false;msg.textContent='大人の人数を入れてください';}
         return;
       }
-      const finalPeople=adultVal!==null?(adultVal+childVal):null;
-      const finalChildren=adultVal!==null?childVal:0;
+      const finalPeople=adultVal!==null?(adultVal+(childVal||0)):null;
+      const finalChildren=childVal===null?null:adultVal!==null?childVal:0;
 
       // 全検査が通ってから代入（F5）
       const o=e||{id:uid(),date:targetD,kind:chosenKind,tables:[],nomiStart:null,nomiExtra:0,limitEnd:null,arrived:false,gone:false,called:false,cancelled:false};
@@ -2138,19 +2274,22 @@ function openEdit(e,no){
   f.innerHTML=`<h3></h3>
    <label>名前</label><input name="name" required autocomplete="off" autocorrect="off" spellcheck="false" placeholder="名字だけでOK（さんは自動）">
    <label>大人</label><div id="editPeoplePicker"></div><input type="hidden" name="people" autocomplete="off">
-   <label>子供</label><div class="childPicker"></div><input type="hidden" name="children" value="${e?.children||0}" autocomplete="off">
+   <label>子ども</label><div class="childPicker"></div><input type="hidden" name="children" value="${e?.children===null?'':e?.children??0}" autocomplete="off">
    <label>時間</label><div id="editTimePicker"></div><input type="hidden" name="time" autocomplete="off">
    <label>電話番号</label><input name="tel" type="tel" inputmode="tel" autocomplete="off">
    <label>要望</label><textarea name="note" rows="2" autocomplete="off" autocorrect="off" spellcheck="false"></textarea>
    <label>卓</label><div id="editTblPicker" class="tbl-picker"></div>
    <label>番号で入力（離れた席など）</label><input name="tables" autocomplete="off" placeholder="例: 1, 2, 3">
+   ${!e.cancelled&&!e.gone?'<label>飲み放題</label><div class="nomi-row"></div>':''}
    <p class="message" hidden></p>
    <div class="wide">
-     <button value="save" type="submit" class="on">保存</button>
+     <button value="cancel" type="submit" class="btn-cancel-act">予約を取り消す</button>
      <button value="release" type="submit">割り当て解除</button>
-     <button value="cancel" type="submit">取消</button>
+     <span class="edit-gap" aria-hidden="true"></span>
+     <button value="save" type="submit" class="on">保存</button>
      <button value="close" type="submit">閉じる</button>
    </div>`;
+  {const nomiRow=f.querySelector('.nomi-row');if(nomiRow) fillNomiRow(nomiRow,e);}
   f.querySelector('h3').textContent=`${dispName(e)}（卓 ${no}）`;
 
   const adultInit = (e && e.people !== null && e.people !== undefined) ? Math.max(0, e.people - (e.children || 0)) : null;
@@ -2203,15 +2342,15 @@ function openEdit(e,no){
       if(!f.reportValidity()){ev.preventDefault();return}
       const adultVal=peoplePick.getValue();
       const childRaw=parseInt(f.children?f.children.value:'0',10);
-      const childVal=isNaN(childRaw)||childRaw<0?0:childRaw;
+      const childVal=f.children.value===''?null:isNaN(childRaw)||childRaw<0?0:childRaw;
       if(adultVal===null&&childVal>0){
         ev.preventDefault();
         message.hidden=false;
         message.textContent='大人の人数を入れてください';
         return;
       }
-      const finalPeople=adultVal!==null?(adultVal+childVal):null;
-      const finalChildren=adultVal!==null?childVal:0;
+      const finalPeople=adultVal!==null?(adultVal+(childVal||0)):null;
+      const finalChildren=childVal===null?null:adultVal!==null?childVal:0;
       const rawTbl=normalizeDigits(f.tables ? f.tables.value : '');
       const tables=rawTbl?rawTbl.split(/[、,・\s]+/).filter(Boolean):[];
       if(tables.length===0){
@@ -2304,9 +2443,9 @@ const TUT_STEPS=[
    target:()=>document.querySelector('#resList .item[data-entry-id="p-hold"]'),done:()=>(byIdP('p-hold')?.tables.length||0)>0},
   {text:'席の中に出る表示の意味です（1/3）。\n赤く点滅して「遅れ」…予約の時間を過ぎても、まだ来ていないお客さんです（席12）。\n来店したら、予約を押して「使用中にする」を押します。',
    target:()=>document.querySelector('.seat[data-no="12"]'),next:true},
-  {text:'表示の意味（2/3）。飲み放題の時間です（席8）。\n「飲み放題 あと○分」→ 75分で黄色「まもなくラストオーダー あと○分」→ 90分で赤く点滅「ラストオーダー」。\n黄色や赤になったら、お客さんに声をかけます。',
+  {text:'表示の意味（2/3）。飲み放題の時間です（席8）。\n「飲み放題 あと○分」→ 75分で黄色「飲み放題 LOまで○分」→ 90分で赤く点滅「飲み放題 LOの時間です」（LO＝ラストオーダー）。\n黄色や赤になったら、お客さんに声をかけます。',
    target:()=>document.querySelector('.seat[data-no="8"]'),next:true},
-  {text:'表示の意味（3/3）。「あと○分」は、席を空けてもらうまでの時間です（席9）。\n飲み放題とこの時間は、使用中の予約を押すと下にボタンがあります。使わない日は押さなくて大丈夫です。',
+  {text:'表示の意味（3/3）。「退席まで○分」は、席を空けてもらうまでの時間です（席9）。\n飲み放題とこの時間は、使用中の予約を押すと下にボタンがあります。使わない日は押さなくて大丈夫です。',
    target:()=>document.querySelector('.seat[data-no="9"]'),next:true},
   {text:'上の日付を押すと、その日の席に切り替わります。\n光っている日付を押してください。',
    target:()=>[...document.querySelectorAll('#dates button')].find(b=>b.dataset.date>today()),done:()=>date>getOpenDate(today())},
@@ -2409,6 +2548,7 @@ $('fsDown').onclick=()=>{db.fs=Math.max(16,db.fs-1);try{lastSaved=JSON.stringify
 $('grip').onclick=()=>{db.leftOff=!db.leftOff;try{lastSaved=JSON.stringify(db);if(!practice)localStorage.setItem(KEY,lastSaved)}catch(_e){}draw()};
 $('addRes').onclick=()=>openForm('res',null);
 $('cxToggle').onclick=()=>{const l=$('cxList');l.hidden=!l.hidden;$('cxToggle').textContent=l.hidden?'表示':'隠す'};
+$('cxMini').onclick=()=>$('cxToggle').click();   // 縦向き: 見出しの小さなボタンから同じ一覧を開く（9.3）
 $('exAdd').onclick=()=>{
   const no=normalizeDigits($('exNo').value); if(!no) return;
   if(!addExtra(date,no)){alert('卓番 '+no+' は既にあります');return}
@@ -2570,6 +2710,8 @@ if(!location.search.includes('test=1')){
 if(location.search.includes('test=1')) (async()=>{
   const bk=JSON.stringify(db), oldDate=date, oldWeekStart=weekStart;
   const _origAlert=window.alert; window.alert=()=>{};
+  const _origTodayGlobal=today;
+  if(parse(today()).getDay()===0){ today=()=>addDays(_origTodayGlobal(),-1); lastToday=today(); }
   let checks=0;
   const check=(ok,label)=>{console.assert(ok,label);if(!ok)throw new Error(`自己チェック失敗: ${label}`);checks++};
   try{
@@ -2597,7 +2739,7 @@ if(location.search.includes('test=1')) (async()=>{
   $('actDlg').close();
 
   check(chip.textContent.includes('20:00')&&chip.textContent.includes('2名')&&chip.querySelector('.chip-note')?.textContent==='カウンター希望','チップは時間・人数と要望の1行目を表示する');
-  check(chip.querySelector('.chip-name')?.textContent==='ドラッグ検査さん'&&chip.querySelector('.chip-people')?.textContent==='2名'&&chip.querySelector('.chip-time')?.textContent==='20:00'&&[...chip.querySelectorAll('.chip-name,.chip-people,.chip-time')].map(el=>el.className).join()==='chip-name,chip-people,chip-time','チップの名前・人数・時間は3つの別々の要素で順に表示する');
+  check(chip.querySelector('.chip-name')?.textContent==='ドラッグ検査さん'&&chip.querySelector('.chip-people')?.textContent==='2名'&&chip.querySelector('.chip-time')?.textContent==='20:00'&&[...chip.querySelectorAll('.chip-name,.chip-people,.chip-time')].map(el=>el.className).join()==='chip-name,chip-time,chip-people','チップの名前・時間・人数は3つの別々の要素で順に表示する（9.1: 時間→人数）');
 
   /* === 27章 完了条件8: 保留カードを卓へドラッグ→割り当て。チップを保留一覧へドラッグ→解除 === */
   dragFromTo(document.querySelector('.chip[data-entry-id="drag1"]'),document.getElementById('resList'));
@@ -2917,7 +3059,7 @@ if(location.search.includes('test=1')) (async()=>{
   document.querySelector('.seat[data-no="14"] .chip').click();
   [...document.querySelectorAll('#actBtns button')].find(b=>b.textContent==='使用中にする').click();
   document.querySelector('.seat[data-no="14"] .chip').click();
-  [...document.querySelectorAll('#actBtns button')].find(b=>b.textContent==='予約を取り消す').click();
+  [...document.querySelectorAll('#actDlg button')].find(b=>b.textContent==='予約を取り消す').click();
   check(!document.querySelector('.seat[data-no="14"]').classList.contains('used')&&!occOf(today()).includes('14'),'使用中の予約を取消すと卓14の青が外れ、occからも外れる');
   const cxUsed=db.entries.find(e=>e.id==='cx-used');
   check(cxUsed.cancelled&&!cxUsed.arrived,'取消した予約はarrived=falseになる（戻すと予約として戻る）');
@@ -3046,7 +3188,9 @@ if(location.search.includes('test=1')) (async()=>{
   check(!$('bkpOpen').classList.contains('warn'),'書き出した直後は警告色が消える');
 
   /* === 折りたたみ(grip) === */
-  const gripUndo=undoStack.length, mapW=()=>$('map').getBoundingClientRect().width;
+  // 縦向き（席が上・一覧が下）では席図は縦に広がる（9.9）
+  const gripPortrait=getComputedStyle($('body')).flexDirection==='column';
+  const gripUndo=undoStack.length, mapW=()=>{const r=$('map').getBoundingClientRect();return gripPortrait?r.height:r.width};
   const openW=mapW();
   $('grip').click();
   check(db.leftOff&&$('left').offsetParent===null&&mapW()>openW,'持ち手を押すと保留一覧がしまわれ席図が広がる');
@@ -3211,7 +3355,7 @@ if(location.search.includes('test=1')) (async()=>{
   /* 11. 空席に「＋ 予約」の文字、フッターに凡例（5つの状態語）がある（U1・U2） */
   db.entries = db.entries.filter(e => !e.tables.includes('20')); draw();
   const seat20 = document.querySelector('.seat[data-no="20"]');
-  check(seat20.textContent.includes('＋ 予約'), '28.2 U1: 空席に「＋ 予約」の文字');
+  check(seat20.textContent.trim()==='20＋'&&seat20.getAttribute('aria-label')?.includes('予約'), '28.2 U1: 空席は「＋」だけ（読み上げには「予約」）');
   const legendText = document.getElementById('legend')?.textContent || '';
   const states = ['空き', '予約', '使用中', '次に入る', '電話待ち'];
   check(states.every(st => legendText.includes(st)), '28.2 U2: フッターに凡例(5つの状態語)がある');
@@ -3505,7 +3649,7 @@ if(location.search.includes('test=1')) (async()=>{
   openForm('res', null);
   const dlgEl = $('dlg');
   const stickyWide = $('frm').querySelector('.wide:last-of-type');
-  check(dlgEl.offsetHeight <= 768, 'F17: fs=24でもダイアログの高さが画面内に収まる');
+  check(dlgEl.offsetHeight <= innerHeight, 'F17: fs=24でもダイアログの高さが画面内に収まる');
   check(getComputedStyle(stickyWide).position === 'sticky', 'F17: 保存・閉じるの行がposition:stickyで常に見える');
   dlgEl.close();
   db.fs = 17; draw();
@@ -3525,7 +3669,7 @@ if(location.search.includes('test=1')) (async()=>{
      ============================================================== */
   /* B2-1: peopleText 関数 */
   check(peopleText({people:4, children:0}) === '4名', 'B2: 子供0なら「4名」');
-  check(peopleText({people:4, children:1}) === '4名(子1)', 'B2: 子供1なら「4名(子1)」');
+  check(peopleText({people:4, children:1}) === '4名（大3・子1）', 'B2: 子供1なら「4名（大3・子1）」');
   check(peopleText({people:null, children:0}) === '人数未定', 'B2: 人数なしは「人数未定」');
 
   /* B2-2: normalizeDb の children 丸め */
@@ -3551,7 +3695,7 @@ if(location.search.includes('test=1')) (async()=>{
   check(b2Entry && b2Entry.people === 4 && b2Entry.children === 1, 'B2: 大人3・子供1で保存するとpeople=4, children=1');
   draw();
   const b2Chip = document.querySelector(`.seat[data-no="${b2Seat}"] .chip[data-entry-id="${b2Entry.id}"]`);
-  check(b2Chip && b2Chip.querySelector('.chip-people')?.textContent === '4名(子1)', 'B2: チップに「4名(子1)」と表示される');
+  check(b2Chip && b2Chip.querySelector('.chip-people')?.textContent === '4名（大3・子1）', 'B2: チップに「4名（大3・子1）」と表示される');
 
   /* B2-4: 大人未入力で子供1は保存されない（「大人の人数を入れてください」） */
   $('addRes').click();
@@ -3576,7 +3720,7 @@ if(location.search.includes('test=1')) (async()=>{
   check(b2LargeEntry && b2LargeEntry.people === 23 && b2LargeEntry.children === 20, 'B2: 子供20人でも保存できる(people=23, children=20)');
   draw();
   const b2LargeChip = document.querySelector(`.seat[data-no="${b2Seat15}"] .chip[data-entry-id="${b2LargeEntry.id}"]`);
-  check(b2LargeChip && b2LargeChip.querySelector('.chip-people')?.textContent === '23名(子20)', 'B2: チップに「23名(子20)」と表示される');
+  check(b2LargeChip && b2LargeChip.querySelector('.chip-people')?.textContent === '23名（大3・子20）', 'B2: チップに「23名（大3・子20）」と表示される');
 
   /* B2-6: 編集で開き直すと大人3・子供1が復元される */
   b2Chip.click();
@@ -3633,12 +3777,12 @@ if(location.search.includes('test=1')) (async()=>{
   nowMs = () => testStartTime + 75 * 60 * 1000;
   draw();
   const nomiWarnBadge = document.querySelector(`.seat[data-no="${b2Seat}"] .chip[data-entry-id="${b2Entry.id}"] .badge.nomi-warn`);
-  check(nomiWarnBadge && nomiWarnBadge.textContent === 'まもなくラストオーダー あと15分', 'B3: 75分経過で黄＋「まもなくラストオーダー あと15分」');
+  check(nomiWarnBadge && nomiWarnBadge.textContent === '飲み放題 LOまで15分', 'B3: 75分経過で黄＋「飲み放題 LOまで15分」');
 
   nowMs = () => testStartTime + 90 * 60 * 1000;
   draw();
   const nomiAlertBadge = document.querySelector(`.seat[data-no="${b2Seat}"] .chip[data-entry-id="${b2Entry.id}"] .badge.nomi-alert`);
-  check(nomiAlertBadge && nomiAlertBadge.textContent === 'ラストオーダー', 'B3: 90分経過で赤点滅＋「ラストオーダー」');
+  check(nomiAlertBadge && nomiAlertBadge.textContent === '飲み放題 LOの時間です', 'B3: 90分経過で赤点滅＋「飲み放題 LOの時間です」');
 
   /* B3-5: 取消で消える */
   document.querySelector(`.seat[data-no="${b2Seat}"] .chip[data-entry-id="${b2Entry.id}"]`).click();
@@ -3661,17 +3805,17 @@ if(location.search.includes('test=1')) (async()=>{
   /* B3-7: 残り5分で黄・0分で赤 */
   draw();
   let limitBadge = document.querySelector(`.seat[data-no="${b2Seat}"] .chip[data-entry-id="${b2Entry.id}"] .badge.limit-normal`);
-  check(limitBadge && limitBadge.textContent === 'あと10分', 'B3: 開始直後は「あと10分」');
+  check(limitBadge && limitBadge.textContent === '退席まで10分', 'B3: 開始直後は「退席まで10分」');
 
   nowMs = () => testStartTime + 5 * 60 * 1000;
   draw();
   const limitWarnBadge = document.querySelector(`.seat[data-no="${b2Seat}"] .chip[data-entry-id="${b2Entry.id}"] .badge.limit-warn`);
-  check(limitWarnBadge && limitWarnBadge.textContent === 'あと5分', 'B3: 残り5分で黄「あと5分」');
+  check(limitWarnBadge && limitWarnBadge.textContent === '退席まで5分', 'B3: 残り5分で黄「退席まで5分」');
 
   nowMs = () => testStartTime + 10 * 60 * 1000;
   draw();
   const limitAlertBadge = document.querySelector(`.seat[data-no="${b2Seat}"] .chip[data-entry-id="${b2Entry.id}"] .badge.limit-alert`);
-  check(limitAlertBadge && limitAlertBadge.textContent === '時間です', 'B3: 残り0分で赤点滅「時間です」');
+  check(limitAlertBadge && limitAlertBadge.textContent === '退席の時間です', 'B3: 残り0分で赤点滅「退席の時間です」');
 
   /* B3-8: 「ほか」で数字欄 */
   document.querySelector(`.seat[data-no="${b2Seat}"] .chip[data-entry-id="${b2Entry.id}"]`).click();
@@ -3854,7 +3998,7 @@ if(location.search.includes('test=1')) (async()=>{
   nowMs = () => b72StartTime + 80 * 60 * 1000;
   draw();
   const b72WarnBadge = document.querySelector(`.seat[data-no="${b72Seat}"] .chip[data-entry-id="${b72Entry.id}"] .badge.nomi-warn`);
-  check(b72WarnBadge && b72WarnBadge.textContent === 'まもなくラストオーダー あと10分', '7.2: 80分経過で「まもなくラストオーダー あと10分」がチップに出る');
+  check(b72WarnBadge && b72WarnBadge.textContent === '飲み放題 LOまで10分', '7.2: 80分経過で「飲み放題 LOまで10分」がチップに出る');
   nowMs = b72OrigNowMs;
   leave(b72Entry);
 
@@ -4421,9 +4565,9 @@ if(location.search.includes('test=1')) (async()=>{
       if(chip.classList.contains('two-line')){
         const note=chip.querySelector('.chip-note'),range=document.createRange();
         range.selectNodeContents(note);
-        check(getComputedStyle(note).whiteSpace==='nowrap',label+': 同卓2件の要望は折り返さない');
+        check(getComputedStyle(note).whiteSpace!=='nowrap',label+': 同卓2件の要望も折り返して隠さない（9.4）');
         const textBounds=range.getBoundingClientRect(),noteBounds=note.getBoundingClientRect();
-        check(range.getClientRects().length===1&&textBounds.left>=noteBounds.left-.75&&textBounds.right<=noteBounds.right+.75&&inside(textBounds,bounds),label+': 要望の全文が1行で欄の幅とチップ内に収まる');
+        check(textBounds.left>=noteBounds.left-.75&&textBounds.right<=noteBounds.right+.75&&inside(textBounds,bounds),label+': 要望の全文が欄の幅とチップ内に収まる');
       }
     };
     try{
@@ -4448,18 +4592,16 @@ if(location.search.includes('test=1')) (async()=>{
 
       const nomiWordNow=nowMs;
       for(const [minutes,cls,expected] of [
-        [105,'nomi-warn','まもなくラストオーダー あと15分（延長30分）'],
-        [120,'nomi-alert','ラストオーダー（延長30分）']
+        [105,'nomi-warn','飲み放題 LOまで15分（延長30分）'],
+        [120,'nomi-alert','飲み放題 LOの時間です（延長30分）']
       ]){
         nowMs=()=>long.nomiStart+minutes*60000;
         $('fsUp').click();
         const chip=document.querySelector(`.chip[data-entry-id="${long.id}"]`);
-        const timer=chip.querySelector('.'+cls),word=timer?.querySelector('span');
-        check(timer?.textContent===expected&&word?.textContent==='ラストオーダー','8.2 '+cls+': 飲み放題の全文とラストオーダーの語を保持');
-        const range=document.createRange();range.selectNodeContents(word);
-        check(range.getClientRects().length===1,'8.2 '+cls+': ラストオーダーの語を途中で折らない');
-        check(inside(timer.getBoundingClientRect(),chip.getBoundingClientRect())&&inside(range.getBoundingClientRect(),chip.getBoundingClientRect()),'8.2 '+cls+': 札とラストオーダーの全文がチップ内に収まる');
-        check(getComputedStyle(word).fontSize===getComputedStyle(timer).fontSize,'8.2 '+cls+': ラストオーダーの語も札と一緒に縮小する');
+        const timer=chip.querySelector('.'+cls);
+        check(timer?.textContent===expected,'8.2/9.2 '+cls+': 飲み放題の札の全文を保持');
+        const range=document.createRange();range.selectNodeContents(timer);
+        check(inside(timer.getBoundingClientRect(),chip.getBoundingClientRect())&&inside(range.getBoundingClientRect(),chip.getBoundingClientRect()),'8.2 '+cls+': 札の全文がチップ内に収まる');
         $('fsDown').click();
       }
       nowMs=nomiWordNow;$('fsUp').click();$('fsDown').click();
@@ -4475,7 +4617,7 @@ if(location.search.includes('test=1')) (async()=>{
       await new Promise(resolve=>requestAnimationFrame(resolve));
       const right=$('right').getBoundingClientRect(),left=$('left').getBoundingClientRect(),grip=$('grip').getBoundingClientRect();
       check(right.bottom<=grip.top+.75&&grip.bottom<=left.top+.75,'8.1: 縦向きは席→持ち手→一覧の順');
-      check(left.height<=9*db.fs+1,'8.1: 一覧は低い帯に収まる');
+      check(left.height<=12*db.fs+1,'8.1/9.3: 一覧は低い帯（上限12em）に収まる');
       check(getComputedStyle($('resList')).flexDirection==='row'&&getComputedStyle($('resList')).overflowX==='auto','8.1: 一覧は横スクロール');
       check($('resList').scrollWidth>$('resList').clientWidth,'8.1: 複数カードは横へ続く');
       const card=$('resList').querySelector('.item');
@@ -4570,15 +4712,219 @@ if(location.search.includes('test=1')) (async()=>{
     }
   }
 
+  /* === バッチ9: 読めない・一覧しにくい所（作成と操作は本番クリック経路） === */
+  {
+    const origNow=nowMs, origHM=nowHM, origFs=db.fs;
+    const hadPortrait=document.body.classList.contains('portrait-test');
+    const inside=(inner,outer)=>inner.width>0&&inner.height>0&&inner.left>=outer.left-.75&&inner.top>=outer.top-.75&&inner.right<=outer.right+.75&&inner.bottom<=outer.bottom+.75;
+    const reserve=(name,no,people,time,note='')=>{
+      (no?document.querySelector(`.seat[data-no="${no}"]`):$('addRes')).click();
+      $('frm').name.value=name;$('frm').note.value=note;
+      $('frm').querySelector(`.p-btn[data-val="${people}"]`).click();
+      $('frm').querySelector(`.t-btn[data-val="${time}"]`).click();
+      $('frm').querySelector('button[value="ok"]').click();
+      return db.entries[db.entries.length-1];
+    };
+    const settle=()=>new Promise(r=>requestAnimationFrame(()=>r()));
+    try{
+      document.body.classList.remove('portrait-test');
+      nowMs=()=>1800000000000;nowHM=()=>'17:00';
+      db.entries=[];db.extra=[];db.occ={};db.fs=19;db.leftOff=false;
+      date=getOpenDate(today());weekStart=mondayOf(date);view='seat';draw();
+
+      // 9.9-1: カウンターの細いマスでも名字を1行・15px以上・はみ出しなし（横向き・縦向きの両方）
+      const hase=reserve('長谷川','7',3,'19:30');
+      check(hase.name==='長谷川'&&hase.tables.join()==='7','9.9-1: カウンター7に長谷川さん3名19:30を作成');
+      const checkHase=label=>{
+        draw();
+        const chip=document.querySelector(`.chip[data-entry-id="${hase.id}"]`),seat=chip.closest('.seat');
+        const main=chip.querySelector('.name-main'),text=main.firstChild,tops=[];
+        for(let i=0;i<text.length;i++){const r=document.createRange();r.setStart(text,i);r.setEnd(text,i+1);tops.push(r.getBoundingClientRect().top)}
+        check(main.textContent==='長谷川'&&tops.every(t=>Math.abs(t-tops[0])<1),label+': 名字「長谷川」を途中で折らない');
+        check(parseFloat(getComputedStyle(chip.querySelector('.chip-name')).fontSize)>=15,label+': 名前は15px以上');
+        for(const el of chip.querySelectorAll('.chip-time,.chip-people'))check(parseFloat(getComputedStyle(el).fontSize)>=15,label+': '+el.className+'は15px以上');
+        const cr=chip.getBoundingClientRect();
+        check(inside(cr,seat.getBoundingClientRect()),label+': チップがマス内');
+        for(const el of chip.querySelectorAll('.chip-name,.name-main,.name-suffix,.chip-time,.chip-people'))check(inside(el.getBoundingClientRect(),cr),label+': '+el.className+'がチップ内');
+      };
+      checkHase('9.9-1 横向き');
+      document.body.classList.add('portrait-test');window.dispatchEvent(new Event('orientationchange'));await settle();
+      checkHase('9.9-1 縦向き');
+      document.body.classList.remove('portrait-test');draw();
+
+      // 9.9-2: どのチップも時間→人数の順（同じ行なら左、違う行なら上）
+      reserve('山本','10',6,'19:00');reserve('佐々木','17',8,'19:00','窓側');reserve('森','17',2,'21:00');reserve('田中','5',2,'18:00');
+      const checkOrder=label=>{
+        const chips=[...document.querySelectorAll('#map .chip')].filter(c=>c.querySelector('.chip-time')&&c.querySelector('.chip-people'));
+        check(chips.length>=5,label+': 時間と人数のあるチップが並ぶ');
+        for(const c of chips){
+          const t=c.querySelector('.chip-time'),p=c.querySelector('.chip-people'),tr=t.getBoundingClientRect(),pr=p.getBoundingClientRect();
+          const domFirst=!!(t.compareDocumentPosition(p)&Node.DOCUMENT_POSITION_FOLLOWING);
+          const sameRow=Math.abs(tr.top-pr.top)<2;
+          check(domFirst&&(sameRow?tr.right<=pr.left+.75:tr.bottom<=pr.top+.75),label+' '+c.dataset.entryId+': 時間が人数より前');
+        }
+      };
+      checkOrder('9.9-2 横向き');
+      document.body.classList.add('portrait-test');window.dispatchEvent(new Event('orientationchange'));await settle();
+      checkOrder('9.9-2 縦向き');
+      document.body.classList.remove('portrait-test');draw();
+
+      // 9.9-3: 札には「退席」「飲み放題/LO」の語（クリック経路で設定し、段階ごとに確かめる）
+      const tana=db.entries.find(e=>e.name==='田中');
+      document.querySelector(`.chip[data-entry-id="${tana.id}"]`).click();
+      [...$('actBtns').querySelectorAll('button')].find(b=>b.textContent==='使用中にする').click();
+      document.querySelector(`.chip[data-entry-id="${tana.id}"]`).click();
+      $('btnNomiStart').click();
+      document.querySelector(`.chip[data-entry-id="${tana.id}"]`).click();
+      [...$('actTimers').querySelectorAll('.btn-limit-m')].find(b=>b.textContent==='20分').click();
+      check(tana.nomiStart&&tana.limitEnd,'9.9-3: 飲み放題と退席の時間を設定');
+      const t0=tana.nomiStart;
+      for(const min of [0,5,18,80,95]){
+        nowMs=()=>t0+min*60000;draw();
+        const chip=document.querySelector(`.chip[data-entry-id="${tana.id}"]`);
+        const lim=chip.querySelector('.badge[class*="limit-"]'),nomi=chip.querySelector('.badge[class*="nomi-"]');
+        check(lim&&lim.textContent.includes('退席'),`9.9-3 ${min}分: 席を空ける札に「退席」（${lim?.textContent}）`);
+        check(nomi&&/飲み放題|LO/.test(nomi.textContent),`9.9-3 ${min}分: 飲み放題の札に「飲み放題」か「LO」（${nomi?.textContent}）`);
+        const ls=getComputedStyle(lim),ns=getComputedStyle(nomi);
+        check(ls.fontSize===ns.fontSize&&ls.fontWeight===ns.fontWeight,`9.9-3 ${min}分: 2種類の札は同じ大きさ・太さ`);
+      }
+      nowMs=()=>1800000000000;draw();
+
+      // 9.9-5: 操作画面に時間・人数・要望。「予約を取り消す」は「閉じる」より下
+      const sasa=db.entries.find(e=>e.name==='佐々木');
+      document.querySelector(`.chip[data-entry-id="${sasa.id}"]`).click();
+      const info=$('actInfo').textContent;
+      check($('actDlg').open&&info.includes('19:00')&&info.includes('8名')&&info.includes('窓側'),'9.9-5: 操作画面に時間・人数・要望の文字');
+      const btns=[...$('actDlg').querySelectorAll('button')];
+      const closeB=btns.find(b=>b.textContent==='閉じる'),cancelB=btns.find(b=>b.textContent==='予約を取り消す');
+      check(closeB&&cancelB&&cancelB.getBoundingClientRect().top>=closeB.getBoundingClientRect().bottom,'9.9-5: 「予約を取り消す」は「閉じる」より下');
+      check(btns.indexOf(cancelB)===btns.length-1,'9.6: 「予約を取り消す」は操作画面の一番下');
+      const timersCss=getComputedStyle($('actTimers'));
+      check(parseFloat(timersCss.marginTop)>=16&&parseFloat(timersCss.borderTopWidth)>=1,'9.7b: 「閉じる」の下は区切り線と16px以上の間隔');
+      closeB.click();
+      check(!$('actDlg').open&&!sasa.cancelled,'9.6: 閉じるで何も変わらない');
+
+      // 9.9-4: 縦向きの一覧で件数と3枚のカードが見える
+      reserve('青木',null,4,'18:30','座敷希望');reserve('小林',null,2,'20:30','誕生日');reserve('大野',null,2,'19:00');
+      document.body.classList.add('portrait-test');window.dispatchEvent(new Event('orientationchange'));await settle();
+      check($('resHead').textContent.includes('3件'),'9.9-4: 見出しに「3件」');
+      const listRect=$('resList').getBoundingClientRect(),cards=[...$('resList').querySelectorAll('.item')];
+      check(cards.length===3&&cards.every(c=>inside(c.getBoundingClientRect(),listRect)),'9.9-4: 3枚のカードがすべて一覧の表示範囲内');
+      check(getComputedStyle(cards[0]).overflowY!=='auto'&&cards.every(c=>c.scrollHeight<=c.clientHeight+1),'9.3: カード内の縦スクロールをしない');
+      check([...cards[0].querySelectorAll('.acts button')].every(b=>b.getBoundingClientRect().height>=40),'9.3: カードのボタンは40px以上');
+      check($('cxMini').getClientRects().length>0&&$('cxHead').getClientRects().length===0,'9.3: 縦向きは「終了・取消」を見出しの小さなボタンにする');
+      [...$('resList').querySelector(`.item[data-entry-id="${db.entries.find(e=>e.name==='小林').id}"]`).querySelectorAll('.acts button')].find(b=>b.textContent==='取消').click();
+      check($('cxMini').textContent==='終了・取消(1)','9.3: 小さなボタンに件数');
+      $('cxMini').click();
+      check(!$('cxList').hidden&&$('cxList').getClientRects().length>0,'9.3: 小さなボタンで終了・取消の一覧が開く');
+      $('cxMini').click();
+      check($('cxList').hidden,'9.3: もう一度押すと閉じる');
+      document.body.classList.remove('portrait-test');draw();
+
+      // 9.7b: 電話待ちは行全体を押せる44px以上のトグル
+      $('addRes').click();
+      const wt=$('frm').querySelector('label.wait-toggle');
+      check(wt&&wt.getBoundingClientRect().height>=44&&wt.querySelector('input[name="wait"]'),'9.7b: 電話待ちは44px以上の1つのlabel');
+      wt.querySelector('.wt-text').click();
+      check($('frm').querySelector('input[name="wait"]').checked,'9.7b: 文言を押してもチェックが入る');
+      $('frm').querySelector('button[value="cancel"]').click();
+      check(getComputedStyle($('bkpOpen')).backgroundColor==='rgba(0, 0, 0, 0)','9.7b: バックアップは赤ベタにしない');
+
+      // 9.7c: 編集画面から飲み放題を始める
+      const yama=db.entries.find(e=>e.name==='山本');
+      document.querySelector(`.chip[data-entry-id="${yama.id}"]`).click();
+      [...$('actBtns').querySelectorAll('button')].find(b=>b.textContent==='編集').click();
+      const startB=$('editFrm').querySelector('.btn-nomi-start-edit');
+      check(!!startB&&!yama.nomiStart,'9.7c: 編集画面に「飲み放題を始める」');
+      $('editFrm').name.value='山本二郎';
+      startB.click();
+      const started=yama.nomiStart;
+      check(started===nowMs()&&yama.nomiExtra===0&&$('editFrm').querySelector('.nomi-now')?.textContent.includes('飲み放題中'),'9.7c: 押した瞬間にnomiStartが入り表示が変わる');
+      check($('editFrm').name.value==='山本二郎','9.7c: 他の未保存の入力は消えない');
+      nowMs=()=>1800000000000+5*60000;
+      $('editFrm').querySelector('button[value="save"]').click();
+      check(yama.name==='山本二郎'&&yama.nomiStart===started,'9.7c: 名前を変えて保存してもnomiStartが残る');
+      nowMs=()=>1800000000000;
+      const card=$('resList').querySelector('.item');
+      card.click();
+      check(!!$('frm').querySelector('.btn-nomi-start-edit'),'9.7c: 卓未定の予約の入力画面にも飲み放題の行');
+      $('frm').querySelector('button[value="cancel"]').click();
+      const kob=db.entries.find(e=>e.name==='小林');
+      check(kob.cancelled,'9.7c: 前提 取り消し済みの予約がある');
+      openEdit(kob,'1');
+      check(!$('editFrm').querySelector('.nomi-row'),'9.7c: 終了・取消の予約では飲み放題の行を出さない');
+      $('editFrm').querySelector('button[value="close"]').click();
+
+      // 9.7d: 新規・編集・描画の本番経路で子ども0／人数あり／未定を確認する（3件）
+      const childButton=(f,text)=>[...f.querySelectorAll('.childPicker button')].find(b=>b.textContent===text);
+      $('addRes').click();
+      const childNew=$('frm');
+      const initiallyClosed=childButton(childNew,'＋子ども')?.getClientRects().length>0&&childNew.querySelector('.childPicker .btn-group').getClientRects().length===0&&childNew.children.value==='0';
+      const childToggleRect=childButton(childNew,'＋子ども').getBoundingClientRect();
+      const timePickerRect=childNew.querySelector('#fTimePicker').getBoundingClientRect();
+      const timeLabelRect=childNew.querySelector('#fTimePicker').previousElementSibling.getBoundingClientRect();
+      const gridAligned=childToggleRect.left>=timePickerRect.left-1&&timeLabelRect.right<timePickerRect.left&&timeLabelRect.top<timePickerRect.bottom&&timeLabelRect.bottom>timePickerRect.top;
+      childButton(childNew,'＋子ども').click();
+      const revealed=!childButton(childNew,'＋子ども')&&childNew.querySelector('.childPicker').previousElementSibling.textContent==='子ども'&&['0','1','2','3','4','5以上','未定'].every(t=>childButton(childNew,t)?.getClientRects().length>0);
+      childNew.name.value='子ども0確認';
+      [...childNew.querySelectorAll('#fPeoplePicker .p-btn')].find(b=>b.textContent==='4').click();
+      childNew.querySelector('#frmSaveBtn').click();
+      const childZero=db.entries.find(e=>e.name==='子ども0確認');
+      $('resList').querySelector(`.item[data-entry-id="${childZero.id}"]`).click();
+      const zeroReopened=childButton($('frm'),'＋子ども')?.getClientRects().length>0&&childZero.children===0;
+      $('frm').querySelector('#frmSaveBtn').click();
+      const zeroResaved=childZero.children===0;
+      openForm('res',childZero);childButton($('frm'),'＋子ども').click();childButton($('frm'),'未定').click();
+      $('frm').querySelector('#frmSaveBtn').click();
+      openForm('res',childZero);
+      const unknownForm=childZero.children===null&&childZero.people===4&&$('frm').children.value===''&&childButton($('frm'),'未定').classList.contains('on');
+      $('frm').querySelector('#frmSaveBtn').click();
+      const unknownFormSaved=childZero.children===null;
+      openForm('res',childZero);childButton($('frm'),'0').click();$('frm').querySelector('#frmSaveBtn').click();
+      check(initiallyClosed&&gridAligned&&revealed&&zeroReopened&&zeroResaved&&unknownForm&&unknownFormSaved,'9.7d: 新規は閉じて開始し時間の左右配置を維持、＋子どもで展開、0と未定を保存・再編集でも保持');
+
+      openEdit(yama,'1');
+      const childEdit=$('editFrm');
+      [...childEdit.querySelectorAll('#editPeoplePicker .p-btn')].find(b=>b.textContent==='4').click();
+      childButton(childEdit,'＋子ども').click();childButton(childEdit,'2').click();
+      childEdit.querySelector('button[value="save"]').click();
+      document.querySelector(`.chip[data-entry-id="${yama.id}"]`).click();
+      [...$('actBtns').querySelectorAll('button')].find(b=>b.textContent==='編集').click();
+      const positiveOpen=!childButton($('editFrm'),'＋子ども')&&childButton($('editFrm'),'2').classList.contains('on')&&$('editFrm').children.value==='2';
+      childButton($('editFrm'),'未定').click();
+      $('editFrm').querySelector('button[value="save"]').click();
+      const unknownSaved=yama.people===4&&yama.children===null&&normalizeDb({entries:[yama]}).entries[0].children===null&&peopleText(yama)==='4名（子未定）';
+      openEdit(yama,'1');
+      const unknownOpen=$('editFrm').children.value===''&&!childButton($('editFrm'),'＋子ども')&&childButton($('editFrm'),'未定').classList.contains('on');
+      $('editFrm').querySelector('button[value="save"]').click();
+      const unknownResaved=yama.children===null&&yama.people===4;
+      openEdit(yama,'1');childButton($('editFrm'),'2').click();
+      $('editFrm').querySelector('button[value="save"]').click();
+      check(positiveOpen&&unknownSaved&&unknownOpen&&unknownResaved,'9.7d: 子ども2は編集時に展開済み、未定は保存・正規化・再編集でも保持');
+
+      openForm('res',childZero);
+      $('frm').querySelector('input[name="tables"]').value='2';
+      $('frm').querySelector('#frmSaveBtn').click();draw();await settle();
+      const childChip=document.querySelector(`.chip[data-entry-id="${yama.id}"] .chip-people`);
+      const zeroChip=document.querySelector(`.chip[data-entry-id="${childZero.id}"] .chip-people`);
+      const childGlyphs=document.createRange();
+      if(childChip) childGlyphs.selectNodeContents(childChip);
+      check(childChip?.textContent==='6名（大4・子2）'&&zeroChip?.textContent==='4名'&&!zeroChip.textContent.includes('（')&&inside(childGlyphs.getBoundingClientRect(),childChip.closest('.chip').getBoundingClientRect()),'9.7d: チップは6名（大4・子2）、0は括弧なし、内訳を切らずに表示');
+    }finally{
+      nowMs=origNow;nowHM=origHM;db.fs=origFs;
+      document.body.classList.toggle('portrait-test',hadPortrait);
+    }
+  }
+
   db=JSON.parse(bk);date=oldDate;weekStart=oldWeekStart;save();draw();
-  window.alert=_origAlert;
+  window.alert=_origAlert;today=_origTodayGlobal;lastToday=_origTodayGlobal();
   const resMsg=`self-check passed: ${checks}件`;
   document.title=resMsg;
   document.body.setAttribute('data-test-result',resMsg);
   console.log(resMsg);
   console.warn(resMsg);
   }catch(err){
-    window.alert=_origAlert;
+    window.alert=_origAlert;today=_origTodayGlobal;lastToday=_origTodayGlobal();
     const errMsg=`self-check failed: ${err.message}`;
     document.title=errMsg;
     document.body.setAttribute('data-test-result',errMsg);
