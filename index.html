@@ -38,6 +38,11 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 header{display:flex;align-items:center;gap:.35em;padding:.3em .5em;border-bottom:1px solid var(--ash);background:var(--sumi-lit);flex:none}
 header .grow{flex:1}
 header h1{font-size:1em;margin:0 .4em 0 0;font-weight:700;letter-spacing:.22em}
+#hdrMore{display:contents}
+header h1{order:-2}
+#awakeBtn,#practiceBtn{order:-1}
+#hdrMoreBtn{display:none}
+#hdrMoreBtn.off{border-color:var(--enji-label);color:var(--enji-label)}
 
 #dates{display:flex;gap:4px;padding:.4em .6em;flex:none;align-items:center}
 #dates button{flex:1;padding:.3em 0;text-align:center;line-height:1.15}
@@ -100,10 +105,11 @@ header h1{font-size:1em;margin:0 .4em 0 0;font-weight:700;letter-spacing:.22em}
 .badge{display:inline-block;flex:none;white-space:nowrap;padding:.1em .4em;font-size:.72em;font-weight:700;line-height:1.2;border-radius:4px;background:var(--karashi);color:var(--sumi);vertical-align:baseline}
 .badge.next{background:var(--moegi);color:var(--sumi)}
 .item .l1{display:flex;align-items:baseline;gap:.4em;flex-wrap:wrap}
-.item .l1 .nm{flex:none;white-space:nowrap}  /* 名前を縦に1字ずつ折らない。詰めるのは横の時間・人数の方 */
+.item .l1 .nm{min-width:0;max-width:100%;white-space:normal;overflow-wrap:anywhere}
 .drag-handle{flex:none;padding:0 .3em;border:0;background:transparent;color:var(--kinari);opacity:.7;cursor:grab;touch-action:none}
 .drag-handle:active{background:transparent;cursor:grabbing}
 .item .nm{font-weight:700;font-size:1.05em}
+.name-suffix{white-space:nowrap}
 .item .mt{color:var(--kinari);opacity:.7;font-size:.82em}
 .item .tbl{font-size:.82em;color:var(--kinari-muted);font-weight:600}
 .item .note{font-size:.85em;color:var(--karashi);font-weight:600;opacity:1;white-space:pre-line}
@@ -135,9 +141,9 @@ header h1{font-size:1em;margin:0 .4em 0 0;font-weight:700;letter-spacing:.22em}
 .seat.used .chip-note{color:var(--kinari)}
 .seat.drop-tgt, #dates button.drop-tgt{border-color:var(--enji);border-style:dashed}
 .seat .no{font-size:1.15em;font-weight:700;line-height:1;display:flex;gap:.25em;align-items:center}
-.seat .no em{font-style:normal;font-size:.6em;color:var(--ao);font-weight:600}
-.seat .as{flex:1;display:flex;flex-direction:column;gap:2px;margin-top:2px;overflow:hidden}
-.seat-empty{display:flex;align-items:center;justify-content:center;flex:1;color:var(--kinari);opacity:.35;font-size:.85em;letter-spacing:.05em}
+.seat .no em{font-style:normal;font-size:.6em;color:var(--ao);font-weight:600;white-space:nowrap}
+.seat .as{flex:1;min-height:0;display:flex;flex-direction:column;gap:2px;margin-top:2px;overflow:hidden}
+.seat-empty{display:flex;align-items:center;justify-content:center;flex:1;min-height:0;color:var(--kinari);opacity:.35;font-size:.85em;letter-spacing:.05em;white-space:nowrap}
 .chip{border-left:5px solid;border-radius:4px;background:var(--sumi-lit);padding:2px 4px;font-size:1em;
   line-height:1.1;overflow:hidden;touch-action:none;
   flex:1;min-height:0;display:flex;flex-direction:column;justify-content:center;cursor:grab;
@@ -151,7 +157,8 @@ header h1{font-size:1em;margin:0 .4em 0 0;font-weight:700;letter-spacing:.22em}
 @keyframes late-blink{0%,100%{background:var(--sumi-lit)}50%{background:#7a1f19}}
 @media (prefers-reduced-motion:reduce){.chip.late,.item.late{animation:none;background:#7a1f19}}
 .chip-timers{display:flex;flex-wrap:wrap;gap:2px;align-items:center;margin-top:2px}
-.chip-timers .badge{font-size:clamp(.6em,11cqw,.75em);padding:.1em .3em;border-radius:3px;max-width:100%;white-space:normal;overflow-wrap:anywhere;line-height:1.15}  /* 狭いカウンターでも「ラストオーダー」を切らずに折り返す */
+.chip .badge{max-width:100%;white-space:normal;word-break:keep-all;overflow-wrap:anywhere}
+.chip-timers .badge{font-size:clamp(.6em,11cqw,.75em);padding:.1em .3em;border-radius:3px;line-height:1.15}
 .chip.timer-warn{background:color-mix(in srgb,var(--karashi) 30%,var(--sumi-lit))!important;outline:2px solid var(--karashi);outline-offset:-2px}
 .chip.timer-alert{outline:3px solid #ff5a4e;outline-offset:-3px;animation:chip-timer-blink 1.2s ease-in-out infinite}
 @keyframes chip-timer-blink{0%,100%{background:#5a1410}50%{background:#a3221a}}
@@ -161,7 +168,7 @@ header h1{font-size:1em;margin:0 .4em 0 0;font-weight:700;letter-spacing:.22em}
 .badge.nomi-alert,.badge.limit-alert{background:#8a1c14;color:#fff;font-weight:700;animation:timer-blink 1.2s ease-in-out infinite}
 @keyframes timer-blink{0%,100%{background:#8a1c14}50%{background:#b3261e}}
 @media (prefers-reduced-motion:reduce){.badge.nomi-alert,.badge.limit-alert{animation:none;background:#8a1c14}}
-.chip.solo .chip-name{font-size:clamp(1em,22cqw,1.75em);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}  /* 1件なら縦に余裕がある。最大2行 */
+.chip.solo .chip-name{font-size:clamp(1em,22cqw,1.75em)}
 .chip.solo .chip-meta{flex-direction:row;gap:.5em;font-size:clamp(.85em,13cqw,1.2em);margin-top:.15em}
 .chip.solo .chip-time{order:-1}
 .chip.two-line .chip-name{font-size:clamp(.9em,16cqw,1.2em)}
@@ -173,14 +180,15 @@ header h1{font-size:1em;margin:0 .4em 0 0;font-weight:700;letter-spacing:.22em}
   .chip .l1{flex-wrap:wrap;white-space:normal}
   .chip-name{white-space:normal;overflow-wrap:anywhere;text-overflow:clip}
 }
-.chip .l1{display:flex;align-items:center;gap:.15em;min-width:0;white-space:nowrap}
-.chip-name{min-width:0;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-weight:700;padding:.2em 0}
-.chip-meta{display:flex;flex-direction:column;gap:1px;min-width:0;overflow:hidden}
-.chip-people,.chip-time{overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-weight:600}
+.chip>*{flex-shrink:0}
+.chip .l1{display:flex;align-items:center;flex-wrap:wrap;gap:.15em;min-width:0;white-space:normal}
+.chip-name{min-width:0;max-width:100%;display:block;white-space:normal;overflow-wrap:anywhere;font-weight:700;padding:.2em 0}
+.chip-meta{display:flex;flex-direction:column;flex-wrap:wrap;gap:1px;min-width:0}
+.chip-people,.chip-time{min-width:0;max-width:100%;white-space:normal;overflow-wrap:anywhere;font-weight:600}
 .chip-tbls{font-size:clamp(.6em,10cqw,.85em);line-height:1.15;overflow-wrap:anywhere;opacity:.9;flex:none}
 .chip-note{color:var(--karashi);font-weight:600;font-size:.8em;margin-top:.1em;
-  overflow:hidden;white-space:nowrap;text-overflow:ellipsis;min-width:0}
-.chip.two-line .chip-note{display:none}
+  white-space:normal;overflow-wrap:anywhere;min-width:0}
+.chip.two-line .chip-note{white-space:nowrap}
 .chip.two-line{padding:1px 3px;font-size:1.05em}
 .chip.two-line .chip-meta{flex-direction:row;gap:.35em}
 .chip.two-line .chip-time{order:-1}
@@ -228,8 +236,8 @@ body.practice header{background:color-mix(in srgb,var(--karashi) 22%,var(--sumi-
 #bkpLastExport.warn{color:var(--enji-label);font-weight:700}
 #undoBtn:not(:disabled){border-color:var(--karashi);color:var(--karashi);font-weight:700}
 .not-today-bar{background:var(--enji);color:var(--kinari);font-size:.82em;font-weight:700;padding:.2em .6em;text-align:center;flex:none;letter-spacing:.05em}
-.legend{display:flex;align-items:center;gap:.5em;font-size:.75em;color:var(--kinari);opacity:.85;min-width:0;overflow:hidden;flex:0 1 auto}
-/* 幅が足りないときは凡例の方を削り、右端のボタンは見切れさせない（2026-09-29） */
+.legend{display:flex;flex-wrap:wrap;align-items:center;gap:.5em;font-size:.75em;color:var(--kinari);opacity:.85;min-width:0;overflow:visible;flex:0 1 auto}
+/* 凡例も操作ボタンも省略せず、足りない幅は折り返す。 */
 #exNo,#exAdd,#bkpOpen{flex:none}
 .lg-item{display:inline-flex;align-items:center;gap:.2em;white-space:nowrap}
 .lg-swatch{display:inline-block;width:11px;height:11px;border-radius:3px;flex:none}
@@ -239,6 +247,12 @@ body.practice header{background:color-mix(in srgb,var(--karashi) 22%,var(--sumi-
 .lg-next{background:var(--moegi)}
 .lg-wait{background:var(--karashi)}
 .lg-guide{font-size:.9em;color:var(--kinari-muted);margin-left:.3em;white-space:nowrap}
+@media (max-width:1100px){.lg-guide{display:none}}
+@media (orientation:landscape) and (max-width:1100px){
+  body:not(.portrait-test) #legend{flex:1 1 8em;min-width:6em}
+  body:not(.portrait-test) #barSpacer,body:not(.portrait-test) #hint:empty{display:none}
+  body:not(.portrait-test) #hint:not(:empty){flex-basis:100%;order:1}
+}
 
 dialog{border:1px solid var(--ash);border-radius:14px;padding:0;max-width:620px;width:92%;max-height:calc(100dvh - 16px);overflow:auto;background:var(--sumi-lit);color:var(--kinari);box-shadow:0 12px 40px rgba(20,12,8,.55)}
 dialog::backdrop{background:#0006}
@@ -282,14 +296,59 @@ form.f .message{grid-column:1/-1;margin:0;color:var(--enji-label);font-size:.85e
 .btn-tbl-cand{background:rgba(255,255,255,.05);border:1px dashed var(--ash);color:var(--kinari)}
 .btn-tbl-cand:active{background:var(--ash)}
 .tbl-cand-status{font-size:.72em;opacity:.85;line-height:1;margin-top:2px}
+@media (orientation:portrait){
+  header{position:relative;gap:.2em}
+  header>button{padding:.35em .45em}
+  #hdrMoreBtn{display:block}
+  #hdrMore{display:none;position:absolute;right:.5em;top:100%;z-index:20;flex-direction:column;gap:.35em;padding:.5em;border:1px solid var(--ash);border-radius:8px;background:var(--sumi-lit);box-shadow:0 5px 15px #0008}
+  #hdrMore.open{display:flex}
+  #hdrMore button{order:0;font-size:1em;min-height:44px;text-align:left}
+  #body{flex-direction:column;gap:.3em}
+  #right{order:0}
+  #grip{order:1;width:100%;height:1.8em;writing-mode:horizontal-tb;letter-spacing:.15em}
+  #left{order:2;width:100%;min-width:0;max-width:none;height:9em;max-height:24vh;flex:none;flex-direction:row;gap:.4em}
+  #left>.box:first-child{min-width:0}
+  #left>.box:last-child{width:9em}
+  #left>.box:last-child h2{flex-wrap:wrap}
+  #left .box>h2{font-size:.78em;padding:.2em .45em}
+  #resList{flex:1;min-height:0;flex-direction:row;overflow-x:auto;overflow-y:hidden;align-items:stretch}
+  #resList .item{flex:0 0 14em;width:14em;overflow-y:auto}
+  #left .item .tbl{display:none}
+  #left .item .acts button{min-height:36px}
+  #mapBar{flex-wrap:wrap;overflow:visible!important;gap:.3em!important;white-space:normal!important}
+  .legend{flex-wrap:wrap;overflow:visible;gap:.35em}
+  .lg-guide{display:none}
+  .zashiki-column{width:6em}
+}
+/* 自己チェックでも端末の向きと同じ規則を使う。 */
+body.portrait-test header{position:relative;gap:.2em}
+body.portrait-test header>button{padding:.35em .45em}
+body.portrait-test #hdrMoreBtn{display:block}
+body.portrait-test #hdrMore{display:none;position:absolute;right:.5em;top:100%;z-index:20;flex-direction:column;gap:.35em;padding:.5em;border:1px solid var(--ash);border-radius:8px;background:var(--sumi-lit);box-shadow:0 5px 15px #0008}
+body.portrait-test #hdrMore.open{display:flex}
+body.portrait-test #hdrMore button{order:0;font-size:1em;min-height:44px;text-align:left}
+body.portrait-test #body{flex-direction:column;gap:.3em}
+body.portrait-test #right{order:0}
+body.portrait-test #grip{order:1;width:100%;height:1.8em;writing-mode:horizontal-tb;letter-spacing:.15em}
+body.portrait-test #left{order:2;width:100%;min-width:0;max-width:none;height:9em;max-height:24vh;flex:none;flex-direction:row;gap:.4em}
+body.portrait-test #left>.box:first-child{min-width:0}
+body.portrait-test #left>.box:last-child{width:9em}
+body.portrait-test #left>.box:last-child h2{flex-wrap:wrap}
+body.portrait-test #left .box>h2{font-size:.78em;padding:.2em .45em}
+body.portrait-test #resList{flex:1;min-height:0;flex-direction:row;overflow-x:auto;overflow-y:hidden;align-items:stretch}
+body.portrait-test #resList .item{flex:0 0 14em;width:14em;overflow-y:auto}
+body.portrait-test #left .item .tbl{display:none}
+body.portrait-test #left .item .acts button{min-height:36px}
+body.portrait-test #mapBar{flex-wrap:wrap;overflow:visible!important;gap:.3em!important;white-space:normal!important}
+body.portrait-test .legend{flex-wrap:wrap;overflow:visible;gap:.35em}
+body.portrait-test .lg-guide{display:none}
+body.portrait-test .zashiki-column{width:6em}
 </style>
 </head>
 <body>
 
 <header>
   <h1>一平</h1>
-  <button id="awakeBtn" class="awake-btn off" type="button">画面: 確認中</button>
-  <button id="practiceBtn" class="practice-btn" type="button">練習・使い方</button>
   <span class="grow"></span>
   <button id="bookBtn" class="book-btn">予約帳</button>
   <button id="wPrev">‹ 前週</button>
@@ -297,8 +356,13 @@ form.f .message{grid-column:1/-1;margin:0;color:var(--enji-label);font-size:.85e
   <button id="wNext">翌週 ›</button>
   <span style="width:.5em"></span>
   <button id="undoBtn" disabled>元に戻す</button>
-  <button id="fsDown">文字 小</button>
-  <button id="fsUp">文字 大</button>
+  <button id="hdrMoreBtn" class="off" type="button" aria-label="その他の操作" aria-controls="hdrMore" aria-expanded="false">≡</button>
+  <span id="hdrMore">
+    <button id="awakeBtn" class="awake-btn off" type="button">画面: 確認中</button>
+    <button id="practiceBtn" class="practice-btn" type="button">練習・使い方</button>
+    <button id="fsDown">文字 小</button>
+    <button id="fsUp">文字 大</button>
+  </span>
 </header>
 
 <div id="practiceTag" class="practice-bar" hidden>
@@ -337,7 +401,7 @@ form.f .message{grid-column:1/-1;margin:0;color:var(--enji-label);font-size:.85e
 
   <div id="right">
     <div id="map"></div>
-    <div style="display:flex;gap:.5em;align-items:center;flex:none;white-space:nowrap;overflow:hidden">
+    <div id="mapBar" style="display:flex;flex-wrap:wrap;gap:.5em;align-items:center;flex:none;white-space:nowrap;overflow:visible">
       <div id="legend" class="legend">
         <span class="lg-item"><span class="lg-swatch lg-empty"></span>空き</span>
         <span class="lg-item"><span class="lg-swatch lg-res"></span>予約</span>
@@ -347,7 +411,7 @@ form.f .message{grid-column:1/-1;margin:0;color:var(--enji-label);font-size:.85e
         <span class="lg-guide">卓を押す→予約 ／ 名前を押す→使用中・食事終了</span>
       </div>
       <span class="hint" id="hint" style="overflow:hidden;text-overflow:ellipsis;min-width:0"></span>
-      <span style="flex:1"></span>
+      <span id="barSpacer" style="flex:1"></span>
       <input id="exNo" placeholder="番号" style="width:4.5em" inputmode="numeric">
       <button id="exAdd">臨時席を追加</button>
       <button id="bkpOpen">バックアップ</button>
@@ -691,7 +755,7 @@ const isLate=e=>e.date===today()&&e.kind!=='wait'&&!!e.time&&!e.arrived&&!e.canc
 const lateSig=()=>db.entries.filter(isLate).map(e=>e.id).join();
 let lastLateSig='';
 const timerSig=()=>db.entries
-  .filter(e=>e.arrived&&!e.gone&&!e.cancelled&&(e.nomiStart||e.limitEnd))
+  .filter(e=>!e.gone&&!e.cancelled&&(e.nomiStart||e.limitEnd))
   .map(e=>{
     const p=[e.id];
     if(e.nomiStart){const n=getNomiInfo(e);if(n)p.push(`n:${n.stage}:${n.text}`)}
@@ -751,6 +815,14 @@ function dispName(e){
   if(/(?:様|さん|ちゃん|くん|御中)$/.test(trimmed)) return trimmed;
   return trimmed + 'さん';
 }
+function renderName(el,e){
+  const name=dispName(e);
+  if(name.endsWith('さん')){
+    const suffix=document.createElement('span');
+    suffix.className='name-suffix';suffix.textContent='さん';
+    el.replaceChildren(document.createTextNode(name.slice(0,-2)),suffix);
+  }else el.textContent=name;
+}
 const hue=id=>{let h=0;for(const c of id)h=(h*31+c.charCodeAt(0))%46;return h};
 const color=id=>`hsl(${hue(id)} 58% 50%)`;
 const ofDay=(d,kind)=>db.entries.filter(e=>e.date===d&&(!kind||e.kind===kind)&&!e.cancelled&&!e.gone);
@@ -782,7 +854,7 @@ function itemEl(e){
   div.innerHTML=`<div class="l1"><span class="nm"></span><span class="mt"></span></div>
     <div class="tbl"></div><div class="note mt"></div><div class="acts"></div>`;
   const nmEl=div.querySelector('.nm');
-  nmEl.textContent=dispName(e);
+  renderName(nmEl,e);
   if(isWait){
     const badge=document.createElement('span');
     badge.className='badge';
@@ -851,7 +923,7 @@ function drawLists(){
       const tblStr=e.tables&&e.tables.length?'卓 '+e.tables.join(', '):'卓未定';
       d.innerHTML=`<div class="l1"><span class="nm"></span><span class="mt"></span></div>
         <div class="tbl"></div><div class="acts"></div>`;
-      d.querySelector('.nm').textContent=dispName(e);
+      renderName(d.querySelector('.nm'),e);
       d.querySelector('.mt').textContent=meta;
       d.querySelector('.tbl').textContent=tblStr;
       const b=document.createElement('button');
@@ -972,7 +1044,7 @@ function seatEl(arg,jumpEntryIds){
         wb.textContent=e.called?'連絡済':'電話待ち';
         c.querySelector('.chip-name').before(wb);
       }
-      c.querySelector('.chip-name').textContent=dispName(e);
+      renderName(c.querySelector('.chip-name'),e);
       c.querySelector('.chip-people').textContent=peopleText(e);
       if(!isMerged&&e.tables.length>1){
         const sortedTbls=e.tables.slice().sort((x,y)=>Number(x)-Number(y));
@@ -984,13 +1056,13 @@ function seatEl(arg,jumpEntryIds){
       if(e.time){const time=document.createElement('span');time.className='chip-time';time.textContent=e.time;c.querySelector('.chip-meta').appendChild(time)}
       const note1=(e.note||'').split('\n')[0].trim();
       if(note1){const n=document.createElement('div');n.className='chip-note';n.textContent=note1;c.appendChild(n)}
-      if(e.arrived && !e.gone && !e.cancelled){
+      if(!e.gone && !e.cancelled){
         // 1〜2m離れても気づけるよう、黄・赤の段階ではチップ全体も色を変える（札の文字も必ず出す）
         const st=Math.max(getNomiInfo(e)?.stage||0,getLimitInfo(e)?.stage||0);
         if(st===2) c.classList.add('timer-warn');
         if(st===3) c.classList.add('timer-alert');
       }
-      if(e.arrived && !e.gone && !e.cancelled && (e.nomiStart || e.limitEnd)){
+      if(!e.gone && !e.cancelled && (e.nomiStart || e.limitEnd)){
         const timersDiv=document.createElement('div');
         timersDiv.className='chip-timers';
         if(e.nomiStart){
@@ -999,6 +1071,12 @@ function seatEl(arg,jumpEntryIds){
             const nb=document.createElement('span');
             nb.className=ni.cls;
             nb.textContent=ni.text;
+            const parts=ni.text.split('ラストオーダー');
+            if(parts.length===2){
+              const word=document.createElement('span');
+              word.style.whiteSpace='nowrap';word.textContent='ラストオーダー';
+              nb.replaceChildren(document.createTextNode(parts[0]),word,document.createTextNode(parts[1]));
+            }
             timersDiv.appendChild(nb);
           }
         }
@@ -1141,6 +1219,40 @@ function drawBook(){
     g.appendChild(b);
   }
 }
+function fitSeatText(){
+  document.querySelectorAll('#map .seat .no').forEach(no=>{
+    no.style.fontSize='';no.style.flexWrap='';
+    const size=parseFloat(getComputedStyle(no).fontSize);
+    let scale=1;
+    while(scale>.55&&no.scrollWidth>no.clientWidth){
+      scale=Math.max(.55,scale*.92);no.style.fontSize=size*scale+'px';
+    }
+    if(no.scrollWidth>no.clientWidth)no.style.flexWrap='wrap';
+  });
+  const records=[...document.querySelectorAll('#map .chip,#map .seat-empty')].map(el=>{
+    const nodes=[el,...el.querySelectorAll('.chip-name,.chip-meta,.chip-tbls,.chip-note,.badge')];
+    nodes.forEach(n=>n.style.fontSize='');
+    return {el,nodes,scale:1};
+  });
+  // cqw は親の文字サイズでは縮まないので、基準の計算値を各要素に適用する。
+  records.forEach(r=>r.sizes=r.nodes.map(n=>parseFloat(getComputedStyle(n).fontSize)));
+  let pending=records.filter(r=>r.el.clientHeight>0);
+  while(pending.length){
+    pending=pending.filter(({el,scale})=>scale>.55&&(el.scrollHeight>el.clientHeight||el.scrollWidth>el.clientWidth));
+    pending.forEach(r=>{
+      r.scale=Math.max(.55,r.scale*.92);
+      r.nodes.forEach((n,i)=>n.style.fontSize=r.sizes[i]*r.scale+'px');
+    });
+  }
+}
+let fitFrame=0;
+function scheduleSeatTextFit(){
+  cancelAnimationFrame(fitFrame);
+  fitFrame=requestAnimationFrame(fitSeatText);
+}
+window.addEventListener('resize',scheduleSeatTextFit);
+window.addEventListener('orientationchange',scheduleSeatTextFit);
+
 function draw(){
   document.documentElement.style.setProperty('--fs',db.fs+'px');
   const isBook=view==='book';
@@ -1169,6 +1281,7 @@ function draw(){
   grip.setAttribute('aria-label',db.leftOff?'一覧を出す':'一覧をしまう');
   drawLists();
   drawMap();
+  fitSeatText();
 }
 
 /* ---------- 操作 ---------- */
@@ -1392,7 +1505,7 @@ function openActDlg(e,no){
   addBtn('予約を取り消す','btn-cancel-act',()=>cancelEntry(e));
   addBtn('閉じる','',()=>{});
 
-  if(e.arrived && timersEl){
+  if(timersEl){ // 飲み放題は使用中でない（来店前の）席でも始められる
     const secNomi=document.createElement('div');
     secNomi.className='timer-sec';
     if(!e.nomiStart){
@@ -1516,7 +1629,7 @@ function openActDlg(e,no){
       b.onclick=()=>{dlg.close();e.limitEnd=null;save();draw()};
       secLimit.appendChild(b);
     }
-    timersEl.appendChild(secLimit);
+    if(e.arrived) timersEl.appendChild(secLimit); // 席を空ける時間は使用中のみ
   }
 
   dlg.showModal();
@@ -2278,6 +2391,19 @@ $('bookThis').onclick=()=>{bookMonth=today().slice(0,8)+'01';draw()};
 $('bookPrev').onclick=()=>{const d=parse(bookMonth);d.setMonth(d.getMonth()-1);bookMonth=ymd(d);draw()};
 $('bookNext').onclick=()=>{const d=parse(bookMonth);d.setMonth(d.getMonth()+1);bookMonth=ymd(d);draw()};
 $('wToday').onclick=()=>{date=getOpenDate(today());weekStart=mondayOf(date);draw()};
+function closeHeaderMore(){
+  $('hdrMore').classList.remove('open');
+  $('hdrMoreBtn').setAttribute('aria-expanded','false');
+}
+$('hdrMoreBtn').onclick=()=>{
+  const open=$('hdrMore').classList.toggle('open');
+  $('hdrMoreBtn').setAttribute('aria-expanded',String(open));
+};
+$('hdrMore').addEventListener('click',ev=>{if(ev.target.closest('button'))closeHeaderMore()});
+const closeHeaderOutside=ev=>{if(!$('hdrMore').contains(ev.target)&&!$('hdrMoreBtn').contains(ev.target))closeHeaderMore()};
+document.addEventListener('pointerdown',closeHeaderOutside);
+document.addEventListener('click',closeHeaderOutside);
+document.addEventListener('keydown',ev=>{if(ev.key==='Escape'&&$('hdrMore').classList.contains('open')){closeHeaderMore();$('hdrMoreBtn').focus()}});
 $('fsUp').onclick=()=>{db.fs=Math.min(24,db.fs+1);try{lastSaved=JSON.stringify(db);if(!practice)localStorage.setItem(KEY,lastSaved)}catch(_e){}draw()};
 $('fsDown').onclick=()=>{db.fs=Math.max(16,db.fs-1);try{lastSaved=JSON.stringify(db);if(!practice)localStorage.setItem(KEY,lastSaved)}catch(_e){}draw()};
 $('grip').onclick=()=>{db.leftOff=!db.leftOff;try{lastSaved=JSON.stringify(db);if(!practice)localStorage.setItem(KEY,lastSaved)}catch(_e){}draw()};
@@ -2397,6 +2523,7 @@ function setAwake(st){
   const b=$('awakeBtn');if(!b) return;
   b.textContent=st==='off'?'画面: 消える設定':'画面: 消えない';
   b.classList.toggle('off',st==='off');
+  $('hdrMoreBtn').classList.toggle('off',st==='off');
 }
 async function keepAwake(){
   if(location.search.includes('test=1')&&!keepAwake.allowInTest) return;
@@ -3472,7 +3599,7 @@ if(location.search.includes('test=1')) (async()=>{
   b2Chip.click();
   check($('actDlg').open, 'B3: 未使用中チップクリックで状態ダイアログが開く');
   const b3TimersBox = $('actTimers');
-  check(!b3TimersBox || !b3TimersBox.querySelector('#btnNomiStart'), 'B3: 使用中でない予約に飲み放題ボタンは出ない');
+  check(!!b3TimersBox.querySelector('#btnNomiStart'), 'B3: 使用中でない予約でも飲み放題ボタンが出る');
   check(!b3TimersBox || !b3TimersBox.querySelector('.btn-limit-m'), 'B3: 使用中でない予約に利用時間ボタンは出ない');
   $('actDlg').close();
 
@@ -4263,6 +4390,184 @@ if(location.search.includes('test=1')) (async()=>{
 
     // 後片付け
     db.entries=origEntries; db.extra=origExtra; save(); draw();
+  }
+
+  /* === バッチ8: 全文表示・縦向き（作成と操作は本番クリック経路） === */
+  {
+    const origNow=nowMs, origHM=nowHM, origFs=db.fs;
+    const hadPortrait=document.body.classList.contains('portrait-test');
+    const inside=(inner,outer)=>inner.width>0&&inner.height>0&&inner.left>=outer.left-.75&&inner.top>=outer.top-.75&&inner.right<=outer.right+.75&&inner.bottom<=outer.bottom+.75;
+    const makeReservation=(name,no,note)=>{
+      (no?document.querySelector(`.seat[data-no="${no}"]`):$('addRes')).click();
+      $('frm').name.value=name;
+      $('frm').note.value=note;
+      $('frm').querySelector('.p-btn[data-val="8"]').click();
+      $('frm').querySelector('.t-btn[data-val="18:00"]').click();
+      $('frm').querySelector('button[value="ok"]').click();
+      return db.entries.find(e=>e.name===name);
+    };
+    const checkChip=(id,label)=>{
+      const chip=document.querySelector(`.chip[data-entry-id="${id}"]`);
+      check(!!chip,label+': チップがある');
+      const bounds=chip.getBoundingClientRect();
+      check(inside(bounds,chip.closest('.as').getBoundingClientRect()),label+': チップが割り当て欄内に収まる');
+      check(inside(bounds,chip.closest('.seat').getBoundingClientRect()),label+': チップがマス内に収まる');
+      for(const el of chip.querySelectorAll('.chip-name,.chip-people,.chip-time,.chip-note,.badge')){
+        const css=getComputedStyle(el);
+        check(css.textOverflow!=='ellipsis'&&!(parseInt(css.webkitLineClamp,10)>0),label+': '+el.className+'を省略しない');
+        check(inside(el.getBoundingClientRect(),bounds),label+': '+el.className+'がチップ内に収まる');
+      }
+      check(chip.querySelector('.chip-note')?.getBoundingClientRect().height>0,label+': 要望を表示する');
+      if(chip.classList.contains('two-line')){
+        const note=chip.querySelector('.chip-note'),range=document.createRange();
+        range.selectNodeContents(note);
+        check(getComputedStyle(note).whiteSpace==='nowrap',label+': 同卓2件の要望は折り返さない');
+        const textBounds=range.getBoundingClientRect(),noteBounds=note.getBoundingClientRect();
+        check(range.getClientRects().length===1&&textBounds.left>=noteBounds.left-.75&&textBounds.right<=noteBounds.right+.75&&inside(textBounds,bounds),label+': 要望の全文が1行で欄の幅とチップ内に収まる');
+      }
+    };
+    try{
+      document.body.classList.remove('portrait-test');
+      nowMs=()=>1800000000000;nowHM=()=>'17:00';
+      db.entries=[];db.extra=[];db.occ={};db.fs=19;db.leftOff=false;
+      date=getOpenDate(today());weekStart=mondayOf(date);view='seat';draw();
+      const long=makeReservation('長谷川太郎左衛門','7','アレルギー: えび・かに、誕生日ケーキ持込');
+      document.querySelector(`.chip[data-entry-id="${long.id}"]`).click();
+      $('btnNomiStart').click();
+      document.querySelector(`.chip[data-entry-id="${long.id}"]`).click();
+      [...$('actTimers').querySelectorAll('.btn-nomi-ext')].find(b=>b.textContent==='30分').click();
+      check(long.nomiExtra===30&&!long.arrived,'8.2: 来店前の予約にクリックで飲み放題と延長30分を設定');
+      checkChip(long.id,'8.2 長い名前・要望・延長札');
+      const badge=document.querySelector(`.chip[data-entry-id="${long.id}"] .nomi-normal`);
+      check(badge.textContent.includes('延長30分'),'8.2: 延長分を札に全文表示');
+      const beforeResize=document.querySelector(`.chip[data-entry-id="${long.id}"]`).style.fontSize;
+      window.dispatchEvent(new Event('resize'));
+      await new Promise(resolve=>requestAnimationFrame(resolve));
+      check(document.querySelector(`.chip[data-entry-id="${long.id}"]`).style.fontSize===beforeResize,'8.2: 再計測しても縮小が累積しない');
+      checkChip(long.id,'8.2 resize後');
+
+      const nomiWordNow=nowMs;
+      for(const [minutes,cls,expected] of [
+        [105,'nomi-warn','まもなくラストオーダー あと15分（延長30分）'],
+        [120,'nomi-alert','ラストオーダー（延長30分）']
+      ]){
+        nowMs=()=>long.nomiStart+minutes*60000;
+        $('fsUp').click();
+        const chip=document.querySelector(`.chip[data-entry-id="${long.id}"]`);
+        const timer=chip.querySelector('.'+cls),word=timer?.querySelector('span');
+        check(timer?.textContent===expected&&word?.textContent==='ラストオーダー','8.2 '+cls+': 飲み放題の全文とラストオーダーの語を保持');
+        const range=document.createRange();range.selectNodeContents(word);
+        check(range.getClientRects().length===1,'8.2 '+cls+': ラストオーダーの語を途中で折らない');
+        check(inside(timer.getBoundingClientRect(),chip.getBoundingClientRect())&&inside(range.getBoundingClientRect(),chip.getBoundingClientRect()),'8.2 '+cls+': 札とラストオーダーの全文がチップ内に収まる');
+        check(getComputedStyle(word).fontSize===getComputedStyle(timer).fontSize,'8.2 '+cls+': ラストオーダーの語も札と一緒に縮小する');
+        $('fsDown').click();
+      }
+      nowMs=nomiWordNow;$('fsUp').click();$('fsDown').click();
+
+      const first=makeReservation('佐々木長太郎','6','窓側の席希望');
+      const second=makeReservation('田中小太郎','6','子供用の椅子');
+      check(document.querySelector('.seat[data-no="6"]').querySelectorAll('.chip.two-line').length===2,'8.2: 同卓2件を作成');
+      checkChip(first.id,'8.2 同卓1件目');checkChip(second.id,'8.2 同卓2件目');
+      for(let i=0;i<4;i++)makeReservation('一覧の長い名前'+i,null,'アレルギー: えび・かに、誕生日ケーキ持込');
+
+      document.body.classList.add('portrait-test');
+      window.dispatchEvent(new Event('orientationchange'));
+      await new Promise(resolve=>requestAnimationFrame(resolve));
+      const right=$('right').getBoundingClientRect(),left=$('left').getBoundingClientRect(),grip=$('grip').getBoundingClientRect();
+      check(right.bottom<=grip.top+.75&&grip.bottom<=left.top+.75,'8.1: 縦向きは席→持ち手→一覧の順');
+      check(left.height<=9*db.fs+1,'8.1: 一覧は低い帯に収まる');
+      check(getComputedStyle($('resList')).flexDirection==='row'&&getComputedStyle($('resList')).overflowX==='auto','8.1: 一覧は横スクロール');
+      check($('resList').scrollWidth>$('resList').clientWidth,'8.1: 複数カードは横へ続く');
+      const card=$('resList').querySelector('.item');
+      check(getComputedStyle(card.querySelector('.tbl')).display==='none'&&card.querySelector('.note').textContent==='アレルギー: えび・かに、誕生日ケーキ持込','8.1: 卓未定表示を省き要望は全文保持');
+      check(card.querySelector('.nm').getBoundingClientRect().right<=card.getBoundingClientRect().right+.75,'8.2: 一覧の名前がカード幅内に折り返す');
+      check($('fsUp').getClientRects().length===0&&$('hdrMoreBtn').getAttribute('aria-expanded')==='false','8.1: 通常は追加操作を閉じる');
+      $('hdrMoreBtn').click();
+      check($('fsUp').getClientRects().length>0&&$('hdrMoreBtn').getAttribute('aria-expanded')==='true','8.1: ≡で文字大を表示');
+      const tabOrder=[...document.querySelectorAll('header button')].filter(b=>!b.disabled&&b.tabIndex>=0&&b.getClientRects().length>0);
+      check(tabOrder[tabOrder.indexOf($('hdrMoreBtn'))+1]===$('awakeBtn'),'8.1: ≡の次のTab順序はメニューの最初の操作');
+      check($('hdrMoreBtn').classList.contains('off')===$('awakeBtn').classList.contains('off'),'8.1: ≡にも画面が消える警告状態を反映');
+      $('fsUp').click();
+      check(db.fs===20&&$('fsUp').getClientRects().length===0&&$('hdrMoreBtn').getAttribute('aria-expanded')==='false','8.1: 文字大が動作しメニューが閉じる');
+      $('hdrMoreBtn').click();$('map').click();
+      check(!$('hdrMore').classList.contains('open')&&$('hdrMoreBtn').getAttribute('aria-expanded')==='false','8.1: 外側タップでメニューを閉じる');
+      $('hdrMoreBtn').click();$('hdrMoreBtn').click();
+      check(!$('hdrMore').classList.contains('open'),'8.1: ≡をもう一度押して閉じる');
+      $('hdrMoreBtn').click();$('fsUp').focus();
+      $('fsUp').dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));
+      check(!$('hdrMore').classList.contains('open')&&document.activeElement===$('hdrMoreBtn'),'8.1: Escapeでメニューを閉じ≡へ焦点を戻す');
+      const mapHeight=$('map').getBoundingClientRect().height;
+      $('grip').click();
+      check(db.leftOff&&$('left').getClientRects().length===0&&$('map').getBoundingClientRect().height>mapHeight,'8.1: 一覧をしまうと席が下まで広がる');
+      $('grip').click();
+      check(!db.leftOff&&$('left').getClientRects().length>0,'8.1: 一覧を再表示できる');
+      const backup=$('bkpOpen').getBoundingClientRect();
+      check(backup.right<=innerWidth+.75&&backup.bottom<=innerHeight+.75,'8.1: バックアップが画面内に収まる');
+      checkChip(long.id,'8.2 縦向き長文');
+      checkChip(first.id,'8.2 縦向き同卓1件目');checkChip(second.id,'8.2 縦向き同卓2件目');
+      document.body.classList.toggle('portrait-test',hadPortrait);
+      $('fsDown').click();
+      checkChip(long.id,'8.2 向きを戻した長文');
+
+      const checkSuffix=(nameEl,container,label)=>{
+        const suffix=nameEl.querySelector('.name-suffix');
+        check(suffix?.textContent==='さん'&&getComputedStyle(suffix).whiteSpace==='nowrap',label+': さんを途中で折らない');
+        const range=document.createRange();range.selectNodeContents(suffix);
+        check(range.getClientRects().length===1&&inside(range.getBoundingClientRect(),container.getBoundingClientRect()),label+': さんの全文が1行で表示欄内に収まる');
+        check(getComputedStyle(suffix).fontSize===getComputedStyle(nameEl).fontSize,label+': さんも名前の文字サイズを引き継ぐ');
+      };
+      for(const [name,no] of [['上田','14'],['田中','5'],['長谷川','4'],['佐藤さん','3']]){
+        const e=makeReservation(name,no,'');
+        const chip=document.querySelector(`.chip[data-entry-id="${e.id}"]`);
+        check(e.name===name&&chip.querySelector('.chip-name').textContent===dispName(e),'見た目修正: '+name+'の保存値と表示を保持');
+        checkSuffix(chip.querySelector('.chip-name'),chip,'見た目修正 卓'+no+' '+name);
+        makeReservation(name,null,'');
+        const listed=db.entries[db.entries.length-1];
+        const card=$('resList').querySelector(`.item[data-entry-id="${listed.id}"]`);
+        checkSuffix(card.querySelector('.nm'),card,'見た目修正 卓未定 '+name);
+        [...card.querySelectorAll('.acts button')].find(b=>b.textContent==='取消').click();
+        if($('cxList').hidden)$('cxToggle').click();
+        const cancelled=$('cxList').querySelector(`.item[data-entry-id="${listed.id}"]`);
+        checkSuffix(cancelled.querySelector('.nm'),cancelled,'見た目修正 終了・取消 '+name);
+      }
+      document.querySelector('.seat[data-no="5"] .chip').click();
+      [...$('actBtns').querySelectorAll('button')].find(b=>b.textContent==='使用中にする').click();
+      const checkUsedHeader=label=>{
+        const seat=document.querySelector('.seat[data-no="5"]'),header=seat.querySelector('.no'),used=header.querySelector('em');
+        check(used?.textContent==='使用中'&&getComputedStyle(used).whiteSpace==='nowrap',label+': 使用中を1行で表示する');
+        check(inside(used.getBoundingClientRect(),header.getBoundingClientRect())&&inside(used.getBoundingClientRect(),seat.getBoundingClientRect()),label+': 使用中の札が卓番欄とマス内に収まる');
+        const range=document.createRange();range.selectNodeContents(used);
+        check(range.getClientRects().length===1&&inside(range.getBoundingClientRect(),header.getBoundingClientRect()),label+': 使用中の全文が卓番欄内に収まる');
+      };
+      const checkFooter=label=>{
+        const legend=$('legend'),bar=$('mapBar'),viewport={left:0,top:0,right:innerWidth,bottom:innerHeight};
+        const items=[...legend.querySelectorAll('.lg-item')];
+        check(items.map(el=>el.textContent).join(',')==='空き,予約,使用中,次に入る,電話待ち',label+': 凡例の5つの状態語を保持');
+        for(const el of items){
+          const rect=el.getBoundingClientRect();
+          check(inside(rect,legend.getBoundingClientRect())&&inside(rect,bar.getBoundingClientRect())&&inside(rect,viewport),label+': '+el.textContent+'の凡例を全て表示する');
+        }
+        for(const id of ['exNo','exAdd','bkpOpen'])check(inside($(id).getBoundingClientRect(),bar.getBoundingClientRect())&&inside($(id).getBoundingClientRect(),viewport),label+': '+id+'が下のバーと画面内に収まる');
+      };
+      checkUsedHeader('見た目修正 文字19');checkFooter('見た目修正 文字19');
+      const normalHeaderFont=getComputedStyle(document.querySelector('.seat[data-no="5"] .no')).fontSize;
+      while(db.fs<24)$('fsUp').click();
+      checkUsedHeader('見た目修正 文字24');checkFooter('見た目修正 文字24');
+      document.body.classList.add('portrait-test');
+      window.dispatchEvent(new Event('orientationchange'));
+      await new Promise(resolve=>requestAnimationFrame(resolve));
+      checkUsedHeader('見た目修正 縦向き文字24');checkFooter('見た目修正 縦向き文字24');
+      while(db.fs>19)$('fsDown').click();
+      checkUsedHeader('見た目修正 縦向き文字19');
+      document.body.classList.toggle('portrait-test',hadPortrait);
+      window.dispatchEvent(new Event('resize'));
+      await new Promise(resolve=>requestAnimationFrame(resolve));
+      checkUsedHeader('見た目修正 向きを戻した文字19');
+      check(getComputedStyle(document.querySelector('.seat[data-no="5"] .no')).fontSize===normalHeaderFont,'見た目修正: 卓番欄の縮小が再描画や向きの切替で累積しない');
+    }finally{
+      nowMs=origNow;nowHM=origHM;db.fs=origFs;
+      document.body.classList.toggle('portrait-test',hadPortrait);closeHeaderMore();
+    }
   }
 
   db=JSON.parse(bk);date=oldDate;weekStart=oldWeekStart;save();draw();
