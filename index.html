@@ -183,6 +183,13 @@ header h1{order:-2}
 .chip-meta{display:flex;flex-direction:row;flex-wrap:wrap;column-gap:.4em;row-gap:0;min-width:0}
 .chip-time{white-space:nowrap;font-weight:600}
 .chip-people{min-width:0;max-width:100%;white-space:normal;word-break:keep-all;overflow-wrap:anywhere;font-weight:600}
+/* 10.1: 意味のかたまり（「5名」「（大3・子2）」「LOまで」「10分」「アレルギー:」等）の途中では折らない。
+   幅に入らないかたまりは fitSeatText がそのかたまりだけ縮め、最後の手段でだけ ck-wrap で中を折る */
+.chip .ck{display:inline-block;white-space:nowrap;font-feature-settings:"palt"}  /* 括弧・中黒を詰めて狭いマスでも1行に入れる */
+/* 縮めても読める大きさ（11px）で入らないかたまりだけ中で折る。長音「ー」や小さい仮名を行頭に送らない（strict） */
+.chip .ck.ck-break,.chip.ck-wrap .ck{white-space:normal;line-break:strict;overflow-wrap:anywhere;max-width:100%;word-break:keep-all}
+/* 中で折るときも、まず字の種類の変わり目（「誕生日/ケーキ/持込」）で折る */
+.chip .ck.ck-break .sg,.chip.ck-wrap .ck .sg{display:inline-block;max-width:100%}
 .chip-tbls{font-size:.75em;line-height:1.15;overflow-wrap:anywhere;opacity:.9;flex:none}
 .chip-note{color:var(--karashi);font-weight:600;font-size:.8em;margin-top:.1em;
   white-space:normal;overflow-wrap:anywhere;min-width:0}
@@ -1048,6 +1055,30 @@ function openMoreDlg(entries,no){
   dlg.showModal();
 }
 
+// 10.1: 席のチップの文字を意味のかたまりごとの span（.ck）に分ける。空白は空白のまま残す
+const CK={
+  people:/（[^）]*）|[^（]+/g,                       // 「5名」「（大3・子2）」
+  timer:/（[^）]*）|\d+分?|[^\s（\d]+/g,            // 「飲み放題」「LOまで」「10分」「（延長30分）」
+  note:/[^、，,・:：。]*[、，,・:：。]+|[^、，,・:：。]+/g, // 「アレルギー:」「えび・」「かに」
+};
+function chunkText(el,text,re){
+  const out=[];
+  text.split(/(\s+)/).forEach(p=>{
+    if(!p) return;
+    if(/^\s+$/.test(p)){out.push(document.createTextNode(' '));return}
+    (p.match(re)||[p]).forEach(t=>{
+      const s=document.createElement('span');s.className='ck';
+      // かたまりの中を折るのは最後の手段。そのときはカタカナの出入り・かな→漢字の変わり目で折る
+      // （<wbr> は nowrap の中でも折れてしまうので、区切りは span.sg にして折るときだけ inline-block にする）
+      const segs=t.split(/(?<=[^ァ-ヶー])(?=[ァ-ヶー])|(?<=[ァ-ヶー])(?=[^ァ-ヶー])|(?<=[ぁ-ゖ])(?=[一-龠々])/);
+      if(segs.length<2) s.textContent=t;
+      else segs.forEach(seg=>{const g=document.createElement('span');g.className='sg';g.textContent=seg;s.appendChild(g)});
+      out.push(s);
+    });
+  });
+  el.replaceChildren(...out);
+}
+
 function seatEl(arg,jumpEntryIds){
   const nos=Array.isArray(arg)?arg:[arg];
   const count=nos.length;
@@ -1109,17 +1140,17 @@ function seatEl(arg,jumpEntryIds){
         c.querySelector('.chip-name').before(wb);
       }
       renderName(c.querySelector('.chip-name'),e);
-      c.querySelector('.chip-people').textContent=peopleText(e);
+      chunkText(c.querySelector('.chip-people'),peopleText(e),CK.people);
       if(!isMerged&&e.tables.length>1){
         const sortedTbls=e.tables.slice().sort((x,y)=>Number(x)-Number(y));
         const tblsSpan=document.createElement('span');
         tblsSpan.className='chip-tbls';
-        tblsSpan.textContent=`卓${sortedTbls.join('・')}`;
+        chunkText(tblsSpan,`卓${sortedTbls.join('・')}`,CK.note);
         c.appendChild(tblsSpan);
       }
       if(e.time){const time=document.createElement('span');time.className='chip-time';time.textContent=e.time;c.querySelector('.chip-meta').prepend(time)}
       const note1=(e.note||'').split('\n')[0].trim();
-      if(note1){const n=document.createElement('div');n.className='chip-note';n.textContent=note1;c.appendChild(n)}
+      if(note1){const n=document.createElement('div');n.className='chip-note';chunkText(n,note1,CK.note);c.appendChild(n)}
       if(!e.gone && !e.cancelled){
         // 1〜2m離れても気づけるよう、黄・赤の段階ではチップ全体も色を変える（札の文字も必ず出す）
         const st=Math.max(getNomiInfo(e)?.stage||0,getLimitInfo(e)?.stage||0);
@@ -1134,7 +1165,7 @@ function seatEl(arg,jumpEntryIds){
           if(ni){
             const nb=document.createElement('span');
             nb.className=ni.cls;
-            nb.textContent=ni.text;
+            chunkText(nb,ni.text,CK.timer);
             timersDiv.appendChild(nb);
           }
         }
@@ -1143,7 +1174,7 @@ function seatEl(arg,jumpEntryIds){
           if(li){
             const lb=document.createElement('span');
             lb.className=li.cls;
-            lb.textContent=li.text;
+            chunkText(lb,li.text,CK.timer);
             timersDiv.appendChild(lb);
           }
         }
@@ -1282,6 +1313,89 @@ function drawBook(){
     for(let k=1;k>.6&&c.scrollWidth>c.clientWidth+.5;){k*=.9;c.style.fontSize=k+'em'}
   });
 }
+/* 10.2: マスの高さを中身に応じて配分する。fitSeatText が文字を下限（15px）にそろえた状態で呼ぶ。
+   小上り／中段／カウンター（＋追加）の段と、座敷17〜20の縦のマスが対象。並びは変えない */
+const ROOM=1.15;   // 下限ちょうどではなく少しゆとりを持たせる
+function shareHeights(items,H){
+  const W=items.reduce((a,i)=>a+i.w,0);
+  items.forEach(i=>{i.s=H*i.w/W;i.h=i.s});
+  const over=items.filter(i=>i.need>i.s+.5),under=items.filter(i=>!over.includes(i));
+  if(!over.length) return;
+  under.forEach(i=>{i.spare=Math.max(0,i.s-Math.max(i.need,i.min))});
+  const D=over.reduce((a,i)=>a+i.need-i.s,0),A=under.reduce((a,i)=>a+i.spare,0);
+  if(A<=0) return;
+  if(A>=D){over.forEach(i=>{i.h=i.need});under.forEach(i=>{i.h=i.s-i.spare*D/A})}
+  else{
+    under.forEach(i=>{i.h=i.s-i.spare});
+    const pool=over.reduce((a,i)=>a+i.s,0)+A,N=over.reduce((a,i)=>a+i.need,0);
+    over.forEach(i=>{i.h=pool*i.need/N});
+  }
+}
+function fitSeatHeights(PAD){
+  const px=v=>parseFloat(v)||0;
+  const chipNeed=chip=>{
+    const cs=getComputedStyle(chip),pad=px(cs.paddingTop)+px(cs.paddingBottom)+2*PAD;
+    const kids=[...chip.children].filter(k=>k.getClientRects().length);
+    if(!kids.length) return px(cs.fontSize)*1.2+pad;   // 「他N件」
+    let top=Infinity,bot=-Infinity;
+    kids.forEach(k=>{const r=k.getBoundingClientRect();top=Math.min(top,r.top);bot=Math.max(bot,r.bottom)});
+    return (bot-top)*ROOM+pad;
+  };
+  const seatNeed=seat=>{
+    const as=seat.querySelector('.as'),chrome=seat.offsetHeight-as.offsetHeight;
+    const chips=[...as.children].filter(c=>c.classList.contains('chip'));
+    if(!chips.length){const em=as.querySelector('.seat-empty');return chrome+(em?px(getComputedStyle(em).fontSize)*1.2:0)}
+    return chrome+chips.reduce((a,c)=>a+chipNeed(c),0)+2*(chips.length-1);
+  };
+  const setFlex=(el,prop,v)=>{if(el.style[prop]!==v)el.style[prop]=v};
+  // 段: 一番中身の多いマスに合わせる。どの段も今の高さの0.6倍は残す。足りていれば均等（今と同じ）
+  const main=document.querySelector('#map .main-map');
+  if(main){
+    const rows=[...main.querySelectorAll(':scope>.row')];
+    const gap=px(getComputedStyle(main).rowGap),H=main.clientHeight-gap*(rows.length-1);
+    if(rows.length>1&&H>0){
+      // 必要な高さに比例して配る。必要が今の0.6倍以下の段は0.6倍として数える（中身が少ない日は均等＝今と同じ）
+      const s=H/rows.length,min=.6*s;
+      const items=rows.map(el=>({el,s,need:Math.max(min,...[...el.querySelectorAll('.seat')].map(seatNeed))}));
+      let free=items,rest=H;
+      for(let k=0;k<rows.length;k++){
+        const N=free.reduce((a,i)=>a+i.need,0);
+        free.forEach(i=>{i.h=rest*i.need/N});
+        const low=free.filter(i=>i.h<min);
+        if(!low.length) break;
+        low.forEach(i=>{i.h=min;rest-=min});
+        free=free.filter(i=>!low.includes(i));
+        if(!free.length) break;
+      }
+      const changed=items.some(i=>Math.abs(i.h-i.s)>.5);
+      items.forEach(i=>setFlex(i.el,'flex',changed?`${i.h.toFixed(1)} 1 0px`:''));
+    }
+  }
+  // 座敷: 予約の多いマスを高く、空いたマスは低く（「＋」と卓番号が見える高さ、最低でも均等の半分）
+  const col=document.querySelector('#map .zashiki-column');
+  if(col){
+    const seats=[...col.querySelectorAll(':scope>.seat')];
+    const gap=px(getComputedStyle(col).rowGap),H=col.clientHeight-gap*(seats.length-1);
+    if(seats.length>1&&H>0){
+      const W=seats.reduce((a,s)=>a+s.dataset.nos.split(',').length,0);
+      const items=seats.map(el=>{
+        const w=el.dataset.nos.split(',').length,empty=!el.querySelector('.as>.chip'),need=seatNeed(el);
+        return {el,w,empty,need,min:empty?Math.max(need,.5*H*w/W):.6*H*w/W};
+      });
+      shareHeights(items,H);
+      const emp=items.filter(i=>i.empty),occ=items.filter(i=>!i.empty);
+      if(emp.length&&occ.length){
+        let freed=0;
+        emp.forEach(i=>{const m=Math.min(i.h,i.min);freed+=i.h-m;i.h=m});
+        const T=occ.reduce((a,i)=>a+i.h,0);
+        occ.forEach(i=>{i.h+=freed*i.h/T});
+      }
+      const changed=items.some(i=>Math.abs(i.h-i.s)>.5);
+      // flexGrow は「まとめた卓の数」のまま（7.5）。高さは flexBasis で渡す（合計が列の高さになるので余りはほぼ出ない）
+      items.forEach(i=>setFlex(i.el,'flexBasis',changed?i.h.toFixed(1)+'px':''));
+    }
+  }
+}
 function fitSeatText(){
   document.querySelectorAll('#map .seat .no').forEach(no=>{
     no.style.fontSize='';no.style.flexWrap='';
@@ -1312,7 +1426,8 @@ function fitSeatText(){
     if(!chips.length) return null;
     const parts=[];
     chips.forEach(chip=>{
-      chip.classList.remove('name-wrap');chip.style.fontSize='';
+      chip.classList.remove('name-wrap','ck-wrap');chip.style.fontSize='';
+      chip.querySelectorAll('.ck').forEach(c=>{c.style.fontSize='';c.classList.remove('ck-break')});
       const ns=[...chip.querySelectorAll(':scope>.l1>.chip-name,:scope>.l1>.badge,:scope>.chip-meta,:scope>.chip-tbls,:scope>.chip-note,:scope>.chip-timers>.badge')];
       if(!ns.length){parts.push({n:chip,ratio:.9,min:12,min3:10});return}   // 「他N件」
       ns.forEach(n=>{const [ratio,min,min3]=roleOf(n,chip);parts.push({n,ratio,min,min3})});
@@ -1321,8 +1436,32 @@ function fitSeatText(){
     const probes=chips.map(c=>[c,[...c.querySelectorAll('.name-main,.name-suffix,.chip-time,.chip-people,.badge,.chip-note,.chip-tbls')]]);
     return {chips,parts,probes,phase:1};
   }).filter(g=>g&&g.chips[0].clientHeight>0);
-  const apply=(g,u)=>g.parts.forEach(p=>{p.n.style.fontSize=(g.phase<3?Math.max(p.min,p.ratio*u):g.phase===3?Math.max(p.min3,p.ratio*u):p.ratio*u)+'px'});
+  const HI=base*1.3, LO=8, FLOOR=4, CK_MIN=11;
+  const sizeOf=(g,p,u)=>g.phase<3?Math.max(p.min,p.ratio*u):g.phase===3?Math.max(p.min3,p.ratio*u):p.ratio*u;
+  // 10.1: 幅に入らないかたまり（.ck）だけ、そのかたまりの文字を縮める（他の文字は大きいまま）
+  const apply=(g,u)=>g.parts.forEach(p=>{
+    const px=sizeOf(g,p,u);p.n.style.fontSize=px+'px';
+    if(p.cks)p.cks.forEach(c=>{
+      const cap=(c.avail-c.padEm*px)/c.k,floor=Math.min(px,p.min3<MIN-3?p.min3:CK_MIN);   // 要望・卓番は9px、他は11pxまで縮める
+      c.el.style.fontSize=cap<px?Math.max(cap,floor)+'px':'';
+      c.el.classList.toggle('ck-break',cap<floor);
+    });
+  });
   const PAD=2;   // 予約の明るい枠線（2px）に文字が重ならない余白
+  const px=v=>parseFloat(v)||0;
+  // 下限の大きさで並べて、かたまりの幅（文字の大きさあたり）を測る
+  groups.forEach(g=>apply(g,LO));
+  const ckMeasure=groups.flatMap(g=>g.parts.map(p=>{
+    const els=[...p.n.querySelectorAll('.ck')];
+    if(!els.length) return null;
+    const chip=p.n.closest('.chip'),cs=getComputedStyle(chip),ns=getComputedStyle(p.n),f=sizeOf(g,p,LO);
+    const avail=chip.clientWidth-px(cs.paddingLeft)-px(cs.paddingRight)-2*PAD-1;
+    const padEm=p.n.classList.contains('badge')?(px(ns.paddingLeft)+px(ns.paddingRight))/f:0;
+    return [p,els.map(el=>({el,avail,padEm,w:el.getBoundingClientRect().width,f}))];
+  }).filter(Boolean));
+  ckMeasure.forEach(([p,cs])=>{p.cks=cs.filter(c=>c.w>0).map(c=>({el:c.el,avail:c.avail,padEm:c.padEm,k:c.w/c.f}))});
+  groups.forEach(g=>apply(g,LO));
+  fitSeatHeights(PAD);
   const fits=g=>{
     if(!g.chips.every(c=>c.scrollHeight<=c.clientHeight+.5&&c.scrollWidth<=c.clientWidth+.5)) return false;
     return g.probes.every(([chip,ns])=>{
@@ -1330,7 +1469,6 @@ function fitSeatText(){
       return ns.every(n=>{const r=n.getBoundingClientRect();return r.right<=c.right-PAD+.5&&r.bottom<=c.bottom-PAD+.5&&r.top>=c.top+PAD-.5});
     });
   };
-  const HI=base*1.3, LO=8, FLOOR=4;
   // まず最大の大きさで入るか
   groups.forEach(g=>apply(g,HI));
   let todo=groups.filter(g=>!fits(g));
@@ -1339,7 +1477,7 @@ function fitSeatText(){
   todo.filter(g=>!fits(g)).forEach(g=>{g.phase=2;g.chips.forEach(c=>c.classList.add('name-wrap'))});
   todo.forEach(g=>{if(g.phase===2)apply(g,LO)});
   todo.filter(g=>g.phase===2&&!fits(g)).forEach(g=>{g.phase=3;apply(g,LO)});
-  todo.filter(g=>g.phase===3&&!fits(g)).forEach(g=>{g.phase=4;g.lo=FLOOR;g.hi=LO});
+  todo.filter(g=>g.phase===3&&!fits(g)).forEach(g=>{g.phase=4;g.lo=FLOOR;g.hi=LO;g.chips.forEach(c=>c.classList.add('ck-wrap'))});  // 最後の手段でだけかたまりの中を折る
   // 入る最大の大きさを二分探索（全マス同時に書いてから測り、再計算を1回ずつにまとめる）
   for(let i=0;i<7&&todo.length;i++){
     todo.forEach(g=>{g.mid=(g.lo+g.hi)/2;apply(g,g.mid)});
@@ -4901,6 +5039,48 @@ if(location.search.includes('test=1')) (async()=>{
       openEdit(yama,'1');childButton($('editFrm'),'2').click();
       $('editFrm').querySelector('button[value="save"]').click();
       check(positiveOpen&&unknownSaved&&unknownOpen&&unknownResaved,'9.7d: 子ども2は編集時に展開済み、未定は保存・正規化・再編集でも保持');
+
+      // 10.3: 小上り・座敷の狭いマス（かたまりを折らない・高さの配分・はみ出しなし）。横向き・縦向きの両方
+      {
+        const mk10=o=>Object.assign({date,kind:'res',tel:'',note:'',time:'',people:2,children:0,tables:[],arrived:false,gone:false,called:false,cancelled:false,nomiStart:null,nomiExtra:0,limitEnd:null},o);
+        const rowH=i=>document.querySelectorAll('#map .main-map>.row')[i].getBoundingClientRect().height;
+        const seatH=no=>document.querySelector(`#map .seat[data-no="${no}"]`).getBoundingClientRect().height;
+        const charTops=el=>{
+          const tops=[],w=document.createTreeWalker(el,NodeFilter.SHOW_TEXT);
+          for(let t=w.nextNode();t;t=w.nextNode())for(let i=0;i<t.length;i++){
+            const r=document.createRange();r.setStart(t,i);r.setEnd(t,i+1);const b=r.getBoundingClientRect();
+            if(b.width>0)tops.push(b.top);
+          }
+          return tops;
+        };
+        const savedEntries=db.entries;
+        for(const portrait of [false,true]){
+          const label='10.3 '+(portrait?'縦向き':'横向き');
+          document.body.classList.toggle('portrait-test',portrait);
+          db.entries=[];draw();
+          const before=[rowH(0),rowH(1)];
+          const k=mk10({id:'b10-k',name:'長谷川',time:'19:30',people:5,children:2,tables:['16'],note:'アレルギー: えび・かに',arrived:true,
+            nomiStart:nowMs()-80*60000,limitEnd:nowMs()+15*60000});
+          db.entries=[k,mk10({id:'b10-z1',name:'佐々木',time:'18:00',people:4,tables:['17']}),mk10({id:'b10-z2',name:'高橋',time:'20:30',people:3,tables:['17']})];
+          draw();
+          const chip=document.querySelector('.chip[data-entry-id="b10-k"]');
+          const cks=[...chip.querySelectorAll('.ck')];
+          const texts=cks.map(c=>c.textContent);
+          check(['10分','15分','（大3・子2）','アレルギー:','LOまで','退席まで','飲み放題'].every(t=>texts.includes(t)),label+': 札・人数・要望がかたまりに分かれている（'+texts.join('|')+'）');
+          const broken=cks.filter(c=>{const t=charTops(c);return t.some(v=>Math.abs(v-t[0])>=1)}).map(c=>c.textContent);
+          check(broken.length===0,label+': 各かたまりが1行（途中で折れたもの: '+broken.join('|')+'）');
+          check(rowH(0)>before[0]+.5&&rowH(0)>rowH(1),label+`: 小上りの段が配分前より高く中段より高い（${before[0].toFixed(0)}→${rowH(0).toFixed(0)}、中段${rowH(1).toFixed(0)}）`);
+          check(seatH('17')>seatH('18')+.5,label+`: 2件の座敷17が空きの18より高い（${seatH('17').toFixed(0)} > ${seatH('18').toFixed(0)}）`);
+          const bad=[...document.querySelectorAll('#map .chip')].filter(c=>{
+            const cr=c.getBoundingClientRect(),sr=c.closest('.seat').getBoundingClientRect();
+            const els=[c,...c.querySelectorAll('*')];
+            return !inside(cr,sr)||c.textContent.includes('…')||els.some(e=>{const s=getComputedStyle(e);return s.textOverflow==='ellipsis'||parseInt(s.webkitLineClamp,10)>0})
+              ||[...c.querySelectorAll('.chip-name,.chip-time,.chip-people,.chip-note,.badge')].some(e=>!inside(e.getBoundingClientRect(),cr));
+          });
+          check(bad.length===0,label+': 全チップがマス内に収まり「…」も省略も無い');
+        }
+        db.entries=savedEntries;document.body.classList.remove('portrait-test');draw();
+      }
 
       openForm('res',childZero);
       $('frm').querySelector('input[name="tables"]').value='2';
