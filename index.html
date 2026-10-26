@@ -1331,22 +1331,34 @@ function shareHeights(items,H){
     over.forEach(i=>{i.h=pool*i.need/N});
   }
 }
-function fitSeatHeights(PAD){
+const chipNeedOf=(chip,PAD)=>{
   const px=v=>parseFloat(v)||0;
-  const chipNeed=chip=>{
-    const cs=getComputedStyle(chip),pad=px(cs.paddingTop)+px(cs.paddingBottom)+2*PAD;
-    const kids=[...chip.children].filter(k=>k.getClientRects().length);
-    if(!kids.length) return px(cs.fontSize)*1.2+pad;   // 「他N件」
-    let top=Infinity,bot=-Infinity;
-    kids.forEach(k=>{const r=k.getBoundingClientRect();top=Math.min(top,r.top);bot=Math.max(bot,r.bottom)});
-    return (bot-top)*ROOM+pad;
-  };
+  const cs=getComputedStyle(chip),pad=px(cs.paddingTop)+px(cs.paddingBottom)+2*PAD;
+  const kids=[...chip.children].filter(k=>k.getClientRects().length);
+  if(!kids.length) return px(cs.fontSize)*1.2+pad;   // 「他N件」
+  let top=Infinity,bot=-Infinity;
+  kids.forEach(k=>{const r=k.getBoundingClientRect();top=Math.min(top,r.top);bot=Math.max(bot,r.bottom)});
+  return (bot-top)*ROOM+pad;
+};
+const seatNeedOf=(seat,PAD)=>{
+  const px=v=>parseFloat(v)||0;
+  const chipNeed=chip=>chipNeedOf(chip,PAD);
   const seatNeed=seat=>{
     const as=seat.querySelector('.as'),chrome=seat.offsetHeight-as.offsetHeight;
     const chips=[...as.children].filter(c=>c.classList.contains('chip'));
-    if(!chips.length){const em=as.querySelector('.seat-empty');return chrome+(em?px(getComputedStyle(em).fontSize)*1.2:0)}
+    if(!chips.length){
+      // 空き卓は「＋」の実測の高さで見積もる（文字の大きさ×1.2 では実際の矩形より低く、潰れたときに＋が欠けた）
+      const em=as.querySelector('.seat-empty');if(!em) return chrome;
+      const r=document.createRange();r.selectNodeContents(em);
+      return chrome+Math.max(px(getComputedStyle(em).fontSize)*1.2,r.getBoundingClientRect().height)+1;
+    }
     return chrome+chips.reduce((a,c)=>a+chipNeed(c),0)+2*(chips.length-1);
   };
+  return seatNeed(seat);
+};
+function fitSeatHeights(PAD,counterNeed=0){
+  const px=v=>parseFloat(v)||0;
+  const seatNeed=seat=>seatNeedOf(seat,PAD);
   const setFlex=(el,prop,v)=>{if(el.style[prop]!==v)el.style[prop]=v};
   // 段: 一番中身の多いマスに合わせる。どの段も今の高さの0.6倍は残す。足りていれば均等（今と同じ）
   const main=document.querySelector('#map .main-map');
@@ -1356,16 +1368,33 @@ function fitSeatHeights(PAD){
     if(rows.length>1&&H>0){
       // 必要な高さに比例して配る。必要が今の0.6倍以下の段は0.6倍として数える（中身が少ない日は均等＝今と同じ）
       const s=H/rows.length,min=.6*s;
-      const items=rows.map(el=>({el,s,need:Math.max(min,...[...el.querySelectorAll('.seat')].map(seatNeed))}));
-      let free=items,rest=H;
-      for(let k=0;k<rows.length;k++){
-        const N=free.reduce((a,i)=>a+i.need,0);
-        free.forEach(i=>{i.h=rest*i.need/N});
-        const low=free.filter(i=>i.h<min);
-        if(!low.length) break;
-        low.forEach(i=>{i.h=min;rest-=min});
-        free=free.filter(i=>!low.includes(i));
-        if(!free.length) break;
+      const items=rows.map(el=>{
+        const seats=[...el.querySelectorAll('.seat')],raw=Math.max(...seats.map(seatNeed));
+        // カウンターに回してよいのは予約の無い段だけ。卓番号と「＋」が両方見える高さまで低くしてよい
+        const floor=el.querySelector('.chip')?Infinity:raw;
+        return {el,s,raw,floor,need:Math.max(min,raw)};
+      });
+      const share=(list,rest)=>{
+        let free=list;
+        for(let k=0;k<list.length;k++){
+          const N=free.reduce((a,i)=>a+i.need,0);
+          free.forEach(i=>{i.h=rest*i.need/N});
+          const low=free.filter(i=>i.h<min);
+          if(!low.length) break;
+          low.forEach(i=>{i.h=min;rest-=min});
+          free=free.filter(i=>!low.includes(i));
+          if(!free.length) break;
+        }
+      };
+      share(items,H);
+      // 11.1: カウンターの段が、下限の大きさ（15px・12px）で並べたときに要る高さに足りない日は、予約の無い段を卓番号と「＋」が見える高さまで
+      // 低くし、空いた分を足りない段（カウンターと、中身に要る高さに足りない他の段）へ不足分の比で配る。それでも足りなければ fitSeatText が要望を省く
+      const cnt=items.find(i=>i.el.querySelector('.seat[data-g="3"]'));
+      if(cnt&&cnt.h<counterNeed){
+        const def=new Map(items.map(i=>[i,Math.max(0,(i===cnt?counterNeed:i.raw)-i.h)]));
+        const D=[...def.values()].reduce((a,v)=>a+v,0),empty=items.filter(i=>i.floor<Infinity);
+        const spare=empty.reduce((a,i)=>a+Math.max(0,i.h-i.floor),0),take=Math.min(D,spare);
+        if(take>0){empty.forEach(i=>{i.h-=take*Math.max(0,i.h-i.floor)/spare});items.forEach(i=>{i.h+=take*def.get(i)/D})}
       }
       const changed=items.some(i=>Math.abs(i.h-i.s)>.5);
       items.forEach(i=>setFlex(i.el,'flex',changed?`${i.h.toFixed(1)} 1 0px`:''));
@@ -1396,6 +1425,19 @@ function fitSeatHeights(PAD){
     }
   }
 }
+// 11.1: カウンターが下限の大きさでも入らなかったときの最後の手段。予約の無い段を卓番号が見える高さまで低くし、その分をカウンターの段にだけ回す
+// （「＋」は欠けるが、地図が低く物理的に入らない日に限る。他の予約のある段の高さは変えない）
+function squeezeForCounter(need){
+  const main=document.querySelector('#map .main-map');if(!main) return false;
+  const rows=[...main.querySelectorAll(':scope>.row')],ci=rows.findIndex(r=>r.querySelector('.seat[data-g="3"]'));
+  if(ci<0) return false;
+  const hs=rows.map(r=>r.getBoundingClientRect().height),want=need-hs[ci];
+  const spare=rows.map((r,i)=>i===ci||r.querySelector('.chip')?0:Math.max(0,hs[i]-Math.max(...[...r.querySelectorAll('.seat')].map(x=>x.offsetHeight-x.querySelector('.as').offsetHeight))));
+  const S=spare.reduce((a,v)=>a+v,0),take=Math.min(want,S);
+  if(take<=.5) return false;
+  rows.forEach((r,i)=>{r.style.flex=`${(i===ci?hs[i]+take:hs[i]-take*spare[i]/S).toFixed(1)} 1 0px`});
+  return true;
+}
 function fitSeatText(){
   document.querySelectorAll('#map .seat .no').forEach(no=>{
     no.style.fontSize='';no.style.flexWrap='';
@@ -1425,16 +1467,23 @@ function fitSeatText(){
     const chips=[...as.querySelectorAll(':scope>.chip')];
     if(!chips.length) return null;
     const parts=[];
+    // 11.1: カウンターは名前・時間・人数を15px、内訳・要望ほかを12px未満にしない（段階4の下限なしの縮小もしない）
+    const counter=as.closest('.seat').dataset.g==='3';
     chips.forEach(chip=>{
-      chip.classList.remove('name-wrap','ck-wrap');chip.style.fontSize='';
+      chip.classList.remove('name-wrap','ck-wrap','note-off');chip.style.fontSize='';chip.style.flexGrow='';
+      chip.querySelectorAll('.chip-note[data-full]').forEach(n=>{chunkText(n,n.dataset.full,CK.note);delete n.dataset.full});   // 前回省いた要望を戻す
       chip.querySelectorAll('.ck').forEach(c=>{c.style.fontSize='';c.classList.remove('ck-break')});
       const ns=[...chip.querySelectorAll(':scope>.l1>.chip-name,:scope>.l1>.badge,:scope>.chip-meta,:scope>.chip-tbls,:scope>.chip-note,:scope>.chip-timers>.badge')];
       if(!ns.length){parts.push({n:chip,ratio:.9,min:12,min3:10});return}   // 「他N件」
-      ns.forEach(n=>{const [ratio,min,min3]=roleOf(n,chip);parts.push({n,ratio,min,min3})});
+      ns.forEach(n=>{
+        let [ratio,min,min3]=roleOf(n,chip),ckMin;
+        if(counter){const f=n.matches('.chip-name,.chip-meta')?MIN:12;min=Math.max(min,f);min3=Math.max(min3,f);ckMin=12}
+        parts.push({n,ratio,min,min3,ckMin});
+      });
     });
     // はみ出しの判定に使う要素（名字・時間・人数は枠の内側の余白まで食い込んでも scrollWidth に出ないため、矩形でも確かめる）
     const probes=chips.map(c=>[c,[...c.querySelectorAll('.name-main,.name-suffix,.chip-time,.chip-people,.badge,.chip-note,.chip-tbls')]]);
-    return {chips,parts,probes,phase:1};
+    return {chips,parts,probes,phase:1,counter};
   }).filter(g=>g&&g.chips[0].clientHeight>0);
   const HI=base*1.3, LO=8, FLOOR=4, CK_MIN=11;
   const sizeOf=(g,p,u)=>g.phase<3?Math.max(p.min,p.ratio*u):g.phase===3?Math.max(p.min3,p.ratio*u):p.ratio*u;
@@ -1442,7 +1491,7 @@ function fitSeatText(){
   const apply=(g,u)=>g.parts.forEach(p=>{
     const px=sizeOf(g,p,u);p.n.style.fontSize=px+'px';
     if(p.cks)p.cks.forEach(c=>{
-      const cap=(c.avail-c.padEm*px)/c.k,floor=Math.min(px,p.min3<MIN-3?p.min3:CK_MIN);   // 要望・卓番は9px、他は11pxまで縮める
+      const cap=(c.avail-c.padEm*px)/c.k,floor=Math.min(px,c.min??(p.min3<MIN-3?p.min3:CK_MIN));   // 要望・卓番は9px、他は11px（カウンターは人数15px・内訳ほか12px）まで縮める
       c.el.style.fontSize=cap<px?Math.max(cap,floor)+'px':'';
       c.el.classList.toggle('ck-break',cap<floor);
     });
@@ -1459,14 +1508,28 @@ function fitSeatText(){
     const padEm=p.n.classList.contains('badge')?(px(ns.paddingLeft)+px(ns.paddingRight))/f:0;
     return [p,els.map(el=>({el,avail,padEm,w:el.getBoundingClientRect().width,f}))];
   }).filter(Boolean));
-  ckMeasure.forEach(([p,cs])=>{p.cks=cs.filter(c=>c.w>0).map(c=>({el:c.el,avail:c.avail,padEm:c.padEm,k:c.w/c.f}))});
+  ckMeasure.forEach(([p,cs])=>{p.cks=cs.filter(c=>c.w>0).map(c=>({el:c.el,avail:c.avail,padEm:c.padEm,k:c.w/c.f,
+    min:p.ckMin&&c.el.closest('.chip-people')&&!c.el.textContent.startsWith('（')?MIN:p.ckMin}))});   // 「5名」「人数未定」は15px、「（大3・子2）」は12px
+  // 11.1: カウンターは下限の大きさ（段階3＝名字の折り返しも許した状態）で並べて要る高さを測る。
+  // 1マスに2件あるときは、チップの高さを等分でなく中身の比で分ける（等分だと中身の多い方だけ入らない）
+  const cg=groups.filter(g=>g.counter);
+  cg.forEach(g=>{g.phase=3;g.chips.forEach(c=>c.classList.add('name-wrap'));apply(g,LO)});
+  const counterNeed=Math.max(0,...cg.map(g=>seatNeedOf(g.chips[0].closest('.seat'),PAD)));
+  cg.filter(g=>g.chips.length>1).forEach(g=>g.chips.map(c=>chipNeedOf(c,PAD)).forEach((n,i)=>{g.chips[i].style.flexGrow=n.toFixed(1)}));
+  cg.forEach(g=>{g.phase=1;g.chips.forEach(c=>c.classList.remove('name-wrap'))});
   groups.forEach(g=>apply(g,LO));
-  fitSeatHeights(PAD);
+  fitSeatHeights(PAD,counterNeed);
+  // 11.1: 枠からの余白はチップ自身の内側の余白（padding＋枠）までしか求めない。カウンターは右の余白が1pxなので、
+  // PAD(2px)を求めると幅いっぱいの要望・折り返した人数・札が必ず「はみ出し」になり、段階4（4〜8px）まで縮んでいた
+  const insetOf=chip=>{
+    if(!chip._in){const cs=getComputedStyle(chip),side=s=>Math.min(PAD,px(cs['padding'+s])+px(cs['border'+s+'Width']));chip._in={r:side('Right'),t:side('Top'),b:side('Bottom')}}
+    return chip._in;
+  };
   const fits=g=>{
     if(!g.chips.every(c=>c.scrollHeight<=c.clientHeight+.5&&c.scrollWidth<=c.clientWidth+.5)) return false;
     return g.probes.every(([chip,ns])=>{
-      const c=chip.getBoundingClientRect();
-      return ns.every(n=>{const r=n.getBoundingClientRect();return r.right<=c.right-PAD+.5&&r.bottom<=c.bottom-PAD+.5&&r.top>=c.top+PAD-.5});
+      const c=chip.getBoundingClientRect(),i=insetOf(chip);
+      return ns.every(n=>{if(!n.getClientRects().length)return true;const r=n.getBoundingClientRect();return r.right<=c.right-i.r+.5&&r.bottom<=c.bottom-i.b+.5&&r.top>=c.top+i.t-.5});
     });
   };
   // まず最大の大きさで入るか
@@ -1477,7 +1540,15 @@ function fitSeatText(){
   todo.filter(g=>!fits(g)).forEach(g=>{g.phase=2;g.chips.forEach(c=>c.classList.add('name-wrap'))});
   todo.forEach(g=>{if(g.phase===2)apply(g,LO)});
   todo.filter(g=>g.phase===2&&!fits(g)).forEach(g=>{g.phase=3;apply(g,LO)});
-  todo.filter(g=>g.phase===3&&!fits(g)).forEach(g=>{g.phase=4;g.lo=FLOOR;g.hi=LO;g.chips.forEach(c=>c.classList.add('ck-wrap'))});  // 最後の手段でだけかたまりの中を折る
+  // カウンターは下限のまま、空いた段の「＋」の分を回す → かたまりの中を折る → それでも入らなければ要望を省く（要望は操作画面で見える）
+  if(todo.some(g=>g.counter&&g.phase===3&&!fits(g))) squeezeForCounter(counterNeed);
+  todo.filter(g=>g.counter&&g.phase===3&&!fits(g)).forEach(g=>g.chips.forEach(c=>c.classList.add('ck-wrap')));
+  // 要望を省くときは「要望あり」の印だけ残す（全文は操作画面の「要望: …」で見える）
+  todo.filter(g=>g.counter&&g.phase===3&&!fits(g)).forEach(g=>g.chips.forEach(c=>{
+    const n=c.querySelector('.chip-note');if(!n) return;
+    c.classList.add('note-off');n.dataset.full=n.textContent;chunkText(n,'要望 あり',CK.note);
+  }));
+  todo.filter(g=>!g.counter&&g.phase===3&&!fits(g)).forEach(g=>{g.phase=4;g.lo=FLOOR;g.hi=LO;g.chips.forEach(c=>c.classList.add('ck-wrap'))});  // 最後の手段でだけかたまりの中を折る
   // 入る最大の大きさを二分探索（全マス同時に書いてから測り、再計算を1回ずつにまとめる）
   for(let i=0;i<7&&todo.length;i++){
     todo.forEach(g=>{g.mid=(g.lo+g.hi)/2;apply(g,g.mid)});
@@ -1572,9 +1643,8 @@ function moveTable(e,from,to){
 function setOcc(no,on){
   const o=occOf(date), i=o.indexOf(no);
   if(on){ if(i<0) o.push(no) }
-  else{
-    if(i>=0) o.splice(i,1);
-  }
+  // 11.2: 同じ卓に来店済みの予約が残っていれば外さない（同じ卓の次の予約を一覧へ戻すと、使用中の卓まで occ から外れていた）
+  else if(i>=0&&!db.entries.some(e=>e.date===date&&e.arrived&&!e.gone&&!e.cancelled&&e.tables.includes(no))) o.splice(i,1);
 }
 function arrive(e){
   if(!e.tables.length) return false;
@@ -2136,7 +2206,7 @@ function createTimePicker(initialVal, syncInput){
   wrap.className='time-picker';
   wrap.style.cssText='display:flex;flex-direction:column;gap:4px';
   const topRow=document.createElement('div');
-  topRow.style.cssText='display:flex;gap:4px';
+  topRow.style.cssText='display:flex;gap:4px;align-items:stretch';
   const grid=document.createElement('div');
   grid.className='btn-grid cols-5';
 
@@ -2154,11 +2224,23 @@ function createTimePicker(initialVal, syncInput){
   btns.push(undBtn);
   topRow.appendChild(undBtn);
 
+  const manual=document.createElement('input');
+  manual.type='time';
+  manual.step='60';
+  manual.className='t-manual';
+  manual.setAttribute('aria-label','時間を手入力');
+  manual.setAttribute('autocomplete','off');
+  manual.style.cssText='flex:none;width:7em';
+  topRow.appendChild(manual);
+
   let customBtn = null;
   if(curVal && !TIMES.includes(curVal)){
     customBtn = mkBtn(curVal, curVal, true);
     btns.push(customBtn);
     grid.appendChild(customBtn);
+    manual.value = curVal;
+  } else {
+    manual.value = '';
   }
 
   TIMES.forEach(t=>{
@@ -2174,6 +2256,7 @@ function createTimePicker(initialVal, syncInput){
 
   const bindBtn=(b)=>{
     b.onclick=()=>{
+      manual.value = '';
       btns.forEach(x=>x.classList.remove('on'));
       b.classList.add('on');
       updateSync();
@@ -2200,10 +2283,20 @@ function createTimePicker(initialVal, syncInput){
           customBtn.textContent = v;
           customBtn.dataset.val = v;
         }
+        manual.value = v;
+      } else {
+        manual.value = '';
       }
       btns.forEach(b=>b.classList.toggle('on', b.dataset.val===v));
       updateSync();
     }
+  };
+  // input も拾う（change より先に保存されても手入力の時刻を失わない）。30分刻みの値でも欄は消さない
+  manual.oninput = manual.onchange = () => {
+    const v = manual.value;
+    if(!v) return;
+    picker.setValue(v);
+    manual.value = v;
   };
   updateSync();
   return picker;
@@ -3735,6 +3828,37 @@ if(location.search.includes('test=1')) (async()=>{
   $('editFrm').querySelector('button[value="save"]').click();
   check(f12Entry.time === '18:15', 'F12: 18:15の予約を編集保存しても時刻が維持される');
 
+  /* --- F12b: 時刻の手入力（新規フォーム・編集フォーム・空change・ボタン押し連動） --- */
+  openForm('res', null);
+  $('frm').name.value = 'F12b客';
+  const f12bManual = $('frm').querySelector('.t-manual');
+  check(f12bManual, 'F12b: 新規フォームに手入力欄がある');
+  f12bManual.value = '';
+  f12bManual.dispatchEvent(new Event('change'));
+  const f12bUndBtn = [...$('frm').querySelectorAll('.t-btn')].find(b => b.textContent === '未定');
+  check(f12bUndBtn && f12bUndBtn.classList.contains('on'), 'F12b: 空changeで未定のまま');
+  f12bManual.value = '18:15';
+  f12bManual.dispatchEvent(new Event('change'));
+  const f12bBtn1815 = [...$('frm').querySelectorAll('.t-btn')].find(b => b.textContent === '18:15');
+  check(f12bBtn1815 && f12bBtn1815.classList.contains('on'), 'F12b: 手入力18:15で18:15ボタンがonになる');
+  f12bUndBtn.click();
+  check(f12bManual.value === '', 'F12b: ボタンを押すと手入力欄がクリアされる');
+  f12bManual.value = '18:15';
+  f12bManual.dispatchEvent(new Event('change'));
+  $('frm').querySelector('button[value="ok"]').click();
+  const f12bEntry = db.entries.find(e => e.name === 'F12b客');
+  check(f12bEntry && f12bEntry.time === '18:15', 'F12b: 新規手入力18:15で保存するとtime=18:15');
+  openEdit(f12bEntry, 12);
+  const f12bEditManual = $('editFrm').querySelector('.t-manual');
+  const f12bEdit1815 = [...$('editFrm').querySelectorAll('.t-btn')].find(b => b.textContent === '18:15');
+  check(f12bEdit1815 && f12bEdit1815.classList.contains('on'), 'F12b: 再編集で18:15ボタンがon');
+  check(f12bEditManual && f12bEditManual.value === '18:15', 'F12b: 再編集で手入力欄に18:15が入る');
+  const f12bEdit1900 = [...$('editFrm').querySelectorAll('.t-btn')].find(b => b.textContent === '19:00');
+  f12bEdit1900.click();
+  check(f12bEditManual.value === '', 'F12b: 19:00ボタンクリックで手入力欄が空になる');
+  $('editFrm').querySelector('button[value="save"]').click();
+  check(f12bEntry.time === '19:00', 'F12b: 19:00で保存するとtime=19:00');
+
   /* --- F13: 文字 大／小 が undoStack を消費しない --- */
   const f13Entry = entry('f13-entry', 'F13客');
   db.entries.push(f13Entry); save();
@@ -5080,6 +5204,122 @@ if(location.search.includes('test=1')) (async()=>{
           check(bad.length===0,label+': 全チップがマス内に収まり「…」も省略も無い');
         }
         db.entries=savedEntries;document.body.classList.remove('portrait-test');draw();
+      }
+
+      // 11.3: カウンターの文字の下限（名前・時間・人数15px、内訳・要望12px）と、ドラッグ後の卓・occ。横向き・縦向きの両方
+      {
+        const mk11=o=>Object.assign({date:today(),kind:'res',tel:'',note:'',time:'',people:2,children:0,tables:[],arrived:false,gone:false,called:false,cancelled:false,nomiStart:null,nomiExtra:0,limitEnd:null},o);
+        const savedEntries=db.entries,savedOcc=db.occ,savedDate=date;
+        date=today();
+        const floorOf=t=>{const p=t.parentElement;
+          if(p.closest('.chip-name,.chip-time'))return 15;
+          if(p.closest('.chip-people'))return (p.closest('.ck')||p).textContent.startsWith('（')?12:15;
+          if(p.closest('.chip-note'))return 12;return 0};
+        for(const portrait of [false,true]){
+          const label='11.3 '+(portrait?'縦向き':'横向き');
+          document.body.classList.toggle('portrait-test',portrait);
+          db.occ={};
+          db.entries=[
+            mk11({id:'b11-a',name:'渡辺',time:'18:00',people:2,children:1,tables:['6'],arrived:true,nomiStart:nowMs()-80*60000,limitEnd:nowMs()+15*60000,note:'アレルギー: えび・かに'}),
+            mk11({id:'b11-b',name:'伊藤',time:'17:30',people:1,tables:['7'],arrived:true,nomiStart:nowMs()-30*60000}),
+            mk11({id:'b11-c',name:'長谷川',time:'20:30',people:null,tables:['7'],note:'誕生日ケーキ持込'}),
+            mk11({id:'b11-d',name:'五十嵐',time:'19:00',people:12,children:2,tables:['5'],note:'窓側希望'}),
+            mk11({id:'b11-e',name:'小野寺',time:'18:30',people:6,children:2,tables:['1','2','3']}),
+            mk11({id:'b11-f',name:'佐藤',time:'19:30',people:null,tables:['4']}),
+          ];
+          db.entries.filter(e=>e.arrived).forEach(e=>e.tables.forEach(n=>setOcc(n,true)));
+          draw();
+          const small=[],out=[];
+          document.querySelectorAll('#map .seat[data-g="3"] .chip').forEach(c=>{
+            const cr=c.getBoundingClientRect(),w=document.createTreeWalker(c,NodeFilter.SHOW_TEXT);
+            for(let t=w.nextNode();t;t=w.nextNode()){
+              const f=floorOf(t),fs=parseFloat(getComputedStyle(t.parentElement).fontSize);
+              if(t.data.trim()&&fs<f-.05) small.push(`${c.dataset.entryId}「${t.data}」${fs.toFixed(1)}px<${f}`);
+              const r=document.createRange();r.selectNodeContents(t);
+              if(t.data.trim()&&!inside(r.getBoundingClientRect(),cr)) out.push(`${c.dataset.entryId}「${t.data}」`);
+            }
+            if(!inside(cr,c.closest('.seat').getBoundingClientRect())) out.push(c.dataset.entryId+'のチップ');
+          });
+          check(small.length===0,label+': カウンターの名前・時間・人数は15px以上、内訳・要望は12px以上（'+small.join('、')+'）');
+          check(out.length===0,label+': カウンターの文字がチップ内・チップがマス内（'+out.join('、')+'）');
+          check(['b11-a','b11-c','b11-d'].every(id=>document.querySelector(`.chip[data-entry-id="${id}"] .chip-note`)?.getBoundingClientRect().height>0),label+': カウンターの要望を省かずに出す');
+          check(document.querySelector('.chip[data-entry-id="b11-f"] .chip-people')?.textContent==='人数未定',label+': 人数未定も15px以上で出す');
+
+          // 小上り混雑＋カウンター1席: カウンターに高さを回しても、空き卓の番号と「＋」の実測矩形はマス内に入る
+          db.occ={};
+          db.entries=[
+            mk11({id:'b11-k1',name:'長谷川',time:'19:30',people:5,children:2,tables:['16'],note:'アレルギー: えび・かに'}),
+            mk11({id:'b11-k2',name:'佐藤',time:'18:00',tables:['15'],arrived:true,nomiStart:nowMs()-80*60000,limitEnd:nowMs()+15*60000}),
+            mk11({id:'b11-k3',name:'伊藤',time:'17:30',people:3,tables:['14'],arrived:true}),mk11({id:'b11-k4',name:'渡辺',time:'20:30',people:4,tables:['14']}),
+            mk11({id:'b11-k5',name:'五十嵐',time:'19:00',people:4,children:1,tables:['13'],note:'誕生日ケーキ持込'}),
+            mk11({id:'b11-k6',name:'小野寺',time:'18:30',people:6,tables:['12','11'],arrived:true,nomiStart:nowMs()-30*60000}),
+            mk11({id:'b11-c',name:'渡辺',time:'18:00',people:2,children:1,tables:['6'],arrived:true,nomiStart:nowMs()-80*60000,limitEnd:nowMs()+15*60000,note:'アレルギー: えび・かに'}),
+          ];
+          db.entries.filter(e=>e.arrived).forEach(e=>e.tables.forEach(n=>setOcc(n,true)));
+          draw();
+          const hidden=[...document.querySelectorAll('#map .seat')].filter(s=>s.querySelector('.seat-empty')).filter(s=>{
+            const sr=s.getBoundingClientRect(),r=document.createRange();r.selectNodeContents(s.querySelector('.seat-empty'));
+            return !inside(s.querySelector('.no span').getBoundingClientRect(),sr)||!inside(r.getBoundingClientRect(),sr);
+          }).map(s=>s.dataset.nos+'('+s.getBoundingClientRect().height.toFixed(0)+'px)');
+          check(hidden.length===0,label+': 混雑時も空き卓の番号と「＋」がマス内に見える（欠けた卓: '+hidden.join('、')+'）');
+          check(!document.querySelector('.chip[data-entry-id="b11-c"]').classList.contains('note-off')&&document.querySelector('.chip[data-entry-id="b11-c"] .chip-note').textContent==='アレルギー: えび・かに',label+': 混雑時もカウンターの要望を全文で出す');
+
+          // 地図が低く物理的に入らない日だけ、要望を「要望 あり」の印に替え、全文は操作画面で見せる。高さが戻れば全文に戻る
+          db.entries=[
+            mk11({id:'b11-L',name:'長谷川太郎左衛門',time:'18:00',people:8,tables:['7'],note:'アレルギー: えび・かに、誕生日ケーキ持込'}),
+            mk11({id:'b11-s1',name:'佐々木長太郎',time:'18:00',people:8,tables:['7'],note:'窓側の席希望'}),
+          ];
+          $('map').style.flex='none';$('map').style.height='220px';draw();
+          const offChip=document.querySelector('.chip[data-entry-id="b11-L"]');
+          check(offChip.classList.contains('note-off')&&offChip.querySelector('.chip-note').textContent==='要望 あり'
+            &&parseFloat(getComputedStyle(offChip.querySelector('.chip-note')).fontSize)>=12,label+': 入らない日は要望を12px以上の「要望 あり」に替える');
+          offChip.click();
+          const noteLine=[...$('actInfo').querySelectorAll('*')].map(e=>e.textContent).find(t=>t.startsWith('要望'));
+          check(noteLine==='要望: アレルギー: えび・かに、誕生日ケーキ持込',label+': 要望を省いた予約も操作画面で全文が見える（'+noteLine+'）');
+          document.querySelectorAll('dialog[open]').forEach(d=>d.close());
+          $('map').style.flex='';$('map').style.height='';draw();
+          check(document.querySelector('.chip[data-entry-id="b11-L"] .chip-note').textContent==='アレルギー: えび・かに、誕生日ケーキ持込',label+': 高さが戻れば要望の全文に戻る');
+
+          // ドラッグ後: 卓数が同じ・重複なし・元の卓に残らない・来店済みは occ も移る・日付は変わらない（指とマウスの両方）
+          const seatOf=no=>[...document.querySelectorAll('#map .seat')].find(s=>s.dataset.nos.split(',').includes(no));
+          const dragAs=(type,src,tgt)=>{
+            const a=src.getBoundingClientRect(),b=tgt.getBoundingClientRect();
+            const fire=(el,ev,r)=>el.dispatchEvent(new PointerEvent(ev,{bubbles:true,cancelable:true,pointerId:77,pointerType:type,isPrimary:true,button:0,buttons:1,clientX:r.left+r.width/2,clientY:r.top+r.height/2}));
+            fire(src,'pointerdown',a);fire(src,'pointermove',b);fire(src,'pointerup',b);
+          };
+          const cases=[
+            ['1卓を空き卓へ',[{id:'m',tables:['4']}],'4','6',['6']],
+            ['1卓を予約のある卓へ',[{id:'m',tables:['4']},{id:'o',tables:['5']}],'4','5',['5']],
+            ['使用中を空き卓へ',[{id:'m',tables:['4'],arrived:true}],'4','6',['6']],
+            ['電話待ちを空き卓へ',[{id:'m',tables:['4'],kind:'wait',tel:'090'}],'4','6',['6']],
+            ['まとめ表示の2卓を空き卓へ',[{id:'m',tables:['14','15']}],'14','12',['11','12']],
+            ['2卓の1卓だけ（別表示）',[{id:'m',tables:['14','15']},{id:'x',tables:['15']}],'14','12',['12','15']],
+            ['カウンター連続3卓',[{id:'m',tables:['1','2','3']}],'1','5',['3','4','5']],
+            ['1卓を結合中の卓へ',[{id:'m',tables:['13']},{id:'y',tables:['14','15']}],'13','14',['14']],
+          ];
+          for(const type of ['touch','mouse'])for(const [name,list,from,to,want] of cases){
+            db.occ={};db.entries=list.map(o=>mk11({name:'山田',time:'19:00',...o}));
+            db.entries.filter(e=>e.arrived).forEach(e=>e.tables.forEach(n=>setOcc(n,true)));draw();
+            const e=byId('m'),d0=e.date;
+            dragAs(type,seatOf(from).querySelector('.chip[data-entry-id="m"]'),seatOf(to));
+            const t=e.tables,shown=[...document.querySelectorAll('#map .seat')].filter(s=>s.querySelector('.chip[data-entry-id="m"]')).flatMap(s=>s.dataset.nos.split(',')).sort((a,b)=>a-b);
+            const occ=occOf(today());
+            check(JSON.stringify(t)===JSON.stringify(want)&&new Set(t).size===t.length&&!t.includes(from)&&e.date===d0&&JSON.stringify(shown)===JSON.stringify(want)
+              &&(!e.arrived||(want.every(n=>occ.includes(n))&&!occ.includes(from)))&&!drag&&!pendingDrag&&!document.querySelector('.drag-preview'),
+              `${label} ${type}: ${name}（${from}→${to}）の後、卓は${want.join('・')}だけ（tables=${t} 表示=${shown} occ=${occ}）`);
+          }
+          // 結合中の卓へ入れた予約を、もう一度動かしても1卓のまま
+          db.occ={};db.entries=[mk11({id:'m',name:'山田',tables:['14']}),mk11({id:'y',name:'鈴木',tables:['14','15']})];draw();
+          dragAs('touch',seatOf('14').querySelector('.chip[data-entry-id="m"]'),seatOf('11'));
+          check(JSON.stringify(byId('m').tables)==='["11"]'&&JSON.stringify(byId('y').tables)==='["14","15"]',label+': 結合中の卓から再ドラッグしても1卓のまま、相手の2卓も変わらない');
+          // 同じ卓に来店済みと次の予約: 次の予約を一覧へ戻しても、来店済みの卓は occ に残る
+          db.occ={};db.entries=[mk11({id:'a',name:'伊藤',tables:['4'],arrived:true}),mk11({id:'n',name:'渡辺',tables:['4']})];setOcc('4',true);draw();
+          dragAs('touch',seatOf('4').querySelector('.chip[data-entry-id="n"]'),$('resList'));
+          check(byId('n').tables.length===0&&occOf(today()).includes('4')&&seatOf('4').classList.contains('used'),label+': 同じ卓の次の予約を一覧へ戻しても来店済みの卓は使用中のまま（occ='+occOf(today())+'）');
+          leave(byId('a'));
+          check(!occOf(today()).includes('4'),label+': 来店済みが終わると occ から外れる');
+        }
+        db.entries=savedEntries;db.occ=savedOcc;date=savedDate;document.body.classList.remove('portrait-test');draw();
       }
 
       openForm('res',childZero);
