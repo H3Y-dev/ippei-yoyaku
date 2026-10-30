@@ -4560,6 +4560,7 @@ if(location.search.includes('test=1')) (async()=>{
     $('editDlg').close();
 
     // 7.6-5: 席候補の占有表示（予約あり／使用中）と、それでも押せること
+    const createdTablesBefore = createdEntry.tables.slice();
     createdEntry.tables = [tFirst];
     const otherRes = {
       id: 'other-res-test',
@@ -4603,7 +4604,7 @@ if(location.search.includes('test=1')) (async()=>{
     const frmOnMid2 = frmBoxOcc2.querySelector(`.btn-tbl.on[data-no="${tMid}"]`);
     check(!!frmOnMid2, '7.6: 「使用中」の候補も押して追加できる');
     $('dlg').close();
-    createdEntry.tables = [tLast]; draw();
+    createdEntry.tables = createdTablesBefore; draw();
 
     // 7.6-6: 未配席編集で破綻しない（本番経路）
     getLiveCreatedChip().click();
@@ -5379,8 +5380,8 @@ if(location.search.includes('test=1')) (async()=>{
     setOcc('3', true);
     draw();
 
-    // 使用中になっても余白タップで予約入力は開かない
-    seatWithRes.click();
+    // 使用中になっても余白タップで予約入力は開かない（draw()で作り直された最新のマスを押す）
+    document.querySelector('.seat[data-no="3"]').click();
     check(!$('dlg').open, '新規: 使用中の席のマス自体をクリックしても予約入力#dlgは開かない');
 
     // ③ 一覧の未割当予約を使用中の席へ dragFromTo すると、その席に2件目として入る
