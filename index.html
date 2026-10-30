@@ -1199,8 +1199,12 @@ function seatEl(arg,jumpEntryIds){
       as.appendChild(more);
     }
   }
-  // 卓マスのチップ以外をタップ：予約入力が開く（空席タップで使用中の切り替えはしない）
-  b.onclick=()=>openForm('res',null,date,minNo);
+  // 空席のみ卓マスタップで予約入力が開く（予約が入っている席はカード外タップで開かない誤爆防止）
+  b.onclick=()=>{
+    const hasRes=db.entries.some(e=>e.date===date&&!e.cancelled&&!e.gone&&e.tables.includes(minNo));
+    if(hasRes) return;
+    openForm('res',null,date,minNo);
+  };
   return b;
 }
 
@@ -3601,13 +3605,13 @@ if(location.search.includes('test=1')) (async()=>{
 
   /* 13. 卓から開いた入力画面の保存ボタンが「卓N に予約する」、今日で名前空欄なら「来店客として使用中にする」、名前を入れると戻る（U4） */
   date = today(); draw();
-  document.querySelector('.seat[data-no="5"]').click();
+  document.querySelector('.seat[data-no="4"]').click();
   check($('dlg').open, '#dlgが開く');
   const b13SaveBtn = $('frm').querySelector('#frmSaveBtn');
   check(b13SaveBtn.textContent === '来店客として使用中にする', '28.2 U4: 今日で名前空欄なら「来店客として使用中にする」');
   $('frm').name.value = 'お客様';
   $('frm').name.dispatchEvent(new Event('input'));
-  check(b13SaveBtn.textContent === '卓5に予約する', '28.2 U4: 名前を入れると「卓5に予約する」');
+  check(b13SaveBtn.textContent === '卓4に予約する', '28.2 U4: 名前を入れると「卓4に予約する」');
   $('frm').name.value = '';
   $('frm').name.dispatchEvent(new Event('input'));
   check(b13SaveBtn.textContent === '来店客として使用中にする', '28.2 U4: 名前を消すと戻る');
@@ -4556,6 +4560,7 @@ if(location.search.includes('test=1')) (async()=>{
     $('editDlg').close();
 
     // 7.6-5: 席候補の占有表示（予約あり／使用中）と、それでも押せること
+    createdEntry.tables = [tFirst];
     const otherRes = {
       id: 'other-res-test',
       date: date,
@@ -4598,6 +4603,7 @@ if(location.search.includes('test=1')) (async()=>{
     const frmOnMid2 = frmBoxOcc2.querySelector(`.btn-tbl.on[data-no="${tMid}"]`);
     check(!!frmOnMid2, '7.6: 「使用中」の候補も押して追加できる');
     $('dlg').close();
+    createdEntry.tables = [tLast]; draw();
 
     // 7.6-6: 未配席編集で破綻しない（本番経路）
     getLiveCreatedChip().click();
@@ -4767,13 +4773,12 @@ if(location.search.includes('test=1')) (async()=>{
     const mixedSeat=document.querySelector(`.seat[data-no="${minD}"]`);
     check(mixedSeat.style.outlineColor===normColor(color(mixedTop.id)),'7.5: 下の予約だけ飛び番でも枠色は上の複数卓予約');
 
-    // 10. タップで最小の卓番の予約入力が開く
+    // 10. 予約があるまとめマスのタップでは予約入力が開かない（誤爆防止）
     const resF=mk('t75-f','タップ客',[c1,c2]);
     db.entries=[resF]; save(); draw();
     const seatF=document.querySelector(`.seat[data-no="${minD}"]`);
     seatF.click();
-    check($('dlg').open&&$('frm').querySelector('h3').textContent.includes('予約：卓 '+minD+'（'),'7.5: まとめマスのタップで最小卓番の予約入力が開く');
-    $('frm').querySelector('button[value="cancel"]').click();
+    check(!$('dlg').open,'7.5: 予約があるまとめマスのタップでは予約入力が開かない');
 
     // 11. 座敷（縦列）でのまとめ
     const zNos=ROWS.find(r=>r.lab==='座敷').nos;
@@ -5334,6 +5339,64 @@ if(location.search.includes('test=1')) (async()=>{
       nowMs=origNow;nowHM=origHM;db.fs=origFs;
       document.body.classList.toggle('portrait-test',hadPortrait);
     }
+  }
+
+  /* === 席マスタップの誤爆防止（予約あり席のマス自体タップでは予約入力が開かない） === */
+  {
+    const origDate = date;
+    date = today();
+    db.entries = [];
+    db.extra = [];
+    db.occ = {};
+    draw();
+
+    // ② 空席をクリックすると従来どおり予約入力が開き、卓欄にその席番号が入る
+    const emptySeat = document.querySelector('.seat[data-no="3"]');
+    emptySeat.click();
+    check($('dlg').open, '新規: 空席をクリックすると予約フォーム#dlgが開く');
+    check(!!$('frm').querySelector('#fTblPicker .btn-tbl.on[data-no="3"]') && $('frm').querySelector('h3').textContent.includes('卓 3'), '新規: 開いたフォームの卓欄にその席番号(3)が入る');
+    $('dlg').close();
+
+    // 予約を1件作成（卓3）
+    const resA = entry('new-res-a', '席タップ確認客', ['3']);
+    db.entries.push(resA);
+    draw();
+
+    // ① 予約ありの席の余白（マス自体）を click しても #dlg 等の予約入力が開かない
+    const seatWithRes = document.querySelector('.seat[data-no="3"]');
+    seatWithRes.click();
+    check(!$('dlg').open, '新規: 予約ありの席のマス自体をクリックしても予約入力#dlgは開かない');
+    check(!$('actDlg').open, '新規: マス自体のクリックではチップの状態画面#actDlgも開かない');
+
+    // チップ自体をクリックすると状態画面が開くことは維持されている
+    const chipA = seatWithRes.querySelector('.chip');
+    chipA.click();
+    check($('actDlg').open, '新規: チップ自体のクリックでは状態画面が開く');
+    $('actDlg').close();
+
+    // 使用中にする
+    resA.arrived = true;
+    setOcc('3', true);
+    draw();
+
+    // 使用中になっても余白タップで予約入力は開かない
+    seatWithRes.click();
+    check(!$('dlg').open, '新規: 使用中の席のマス自体をクリックしても予約入力#dlgは開かない');
+
+    // ③ 一覧の未割当予約を使用中の席へ dragFromTo すると、その席に2件目として入る
+    const resB = entry('new-res-b', '2件目未割当客', []);
+    db.entries.push(resB);
+    draw();
+    const handleB = document.querySelector(`.drag-handle[data-entry-id="${resB.id}"]`);
+    check(!!handleB, '新規: 一覧に未割当予約のドラッグつまみが存在する');
+    const curSeat3 = document.querySelector('.seat[data-no="3"]');
+    dragFromTo(handleB, curSeat3);
+    draw();
+    check(resB.tables.includes('3'), '新規: 一覧の未割当予約を使用中の席へドラッグするとその席に2件目として入る');
+    const updatedSeat3 = document.querySelector('.seat[data-no="3"]');
+    check(updatedSeat3.querySelectorAll('.chip').length === 2, '新規: その席にチップが2件表示される');
+
+    date = origDate;
   }
 
   db=JSON.parse(bk);date=oldDate;weekStart=oldWeekStart;save();draw();
